@@ -1,0 +1,700 @@
+# app/core/recon/network.py
+# 네트워크 레벨 정보 수집 모듈
+# 기존 nmap_recon.py를 기반으로 확장
+
+
+import nmap
+import re
+import socket
+import ssl
+import logging
+from typing import Dict, Any, List, Optional
+
+
+logger = logging.getLogger(__name__)
+
+
+def mask_ip(ip: str) -> str:
+    """
+    IP 주소 마스킹 (보안을 위해 마지막 옥텟을 x로 변경)
+    192.168.0.10 -> 192.168.0.x 형태로 마스킹
+    """
+    parts = ip.split(".")
+    if len(parts) == 4:
+        parts[-1] = "x"
+        return ".".join(parts)
+    return ip
+
+
+def parse_service_version(product: str, version: str) -> str:
+    """
+    서비스 제품명과 버전을 결합하여 전체 버전 문자열 생성
+    """
+    if product and version:
+        return f"{product} {version}"
+    if product:
+        return product
+    return "unknown"
+
+def run_recon(target: str, nmap_args: str = None, mask: bool = True, aggressive: bool = True):
+    """
+    Nmap 기반 네트워크 정찰
+    
+    Args:
+        target: 스캔 대상 IP/도메인
+        nmap_args: Nmap 인자 (None이면 자동 설정)
+        mask: IP 마스킹 여부
+        aggressive: 공격적 스캔 여부
+        
+    Returns:
+        호스트 정보 리스트
+    """
+    print(f"\n{'='*60}")
+    print(f"[RECON] STARTING NMAP SCAN")
+    print(f"[RECON] Target: {target}")
+    print(f"[RECON] Mask IP: {mask}")
+    print(f"[RECON] Aggressive: {aggressive}")
+    print(f"{'='*60}")
+    
+    logger.info(f"[RECON] Starting Nmap scan")
+    logger.info(f"[RECON] Target: {target}")
+    logger.info(f"[RECON] Mask IP: {mask}")
+    logger.info(f"[RECON] Aggressive: {aggressive}")
+    
+    # 🆕 타겟 정제
+    nmap_target, web_target, detected_port = sanitize_target_for_nmap(target)
+    
+    # 포트 오버라이드
+    port_override = detected_port
+    
+    if nmap_args is None:
+        if aggressive:
+            # aggressive 모드 - Nessus급 탐지력 + 취약점 직접 검증
+            nmap_args = [
+                "-sV", "-O",  # OS 탐지
+                "-A",  # OS 탐지, 버전 탐지, 스크립트 스캔, traceroute
+                "--script=default,vuln,auth,discovery,banner,exploit,http-headers,http-server-header,http-title,http-methods",
+                "--script-args=unsafe=1,http.useragent='Mozilla/5.0'",
+                "-T4",
+                "--version-intensity=9",
+                "--version-all",
+                "-Pn",
+                "-p-"
+            ]
+            
+            nmap_args_str = " ".join(nmap_args)
+            print(f"[RECON] 🔥 AGGRESSIVE MODE with vulnerability validation!")
+            logger.info(f"[RECON] Aggressive mode enabled with vuln+exploit scripts")
+
+            nmap_args_str = " ".join(nmap_args)
+        else:
+            # 빠른 스캔 (NSE 스크립트만)
+            nmap_args_str = "-sV -Pn -p-"
+    else:
+        nmap_args_str = nmap_args
+    
+    # 포트 오버라이드 처리 - 버전 탐지 + 취약점 검증 강화
+    if port_override:
+        nmap_args_str = (
+            f"-sV --version-intensity=9 --version-all -sT -Pn -p {port_override} "
+            f"--script=banner,http-headers,http-server-header,http-title,http-methods,http-grep,"
+            f"http-robots.txt,http-git,http-svn-info,http-config-backup,"  # ← 추가!
+            f"http-shellshock,http-slowloris-check,http-sql-injection,"  # ← 추가!
+            f"http-stored-xss,http-dombased-xss,http-csrf,"  # ← 추가!
+            f"vuln,auth,exploit,http-vuln*,http-default-accounts "
+            f"--script-args=unsafe=1,http.useragent='Mozilla/5.0'"
+        )
+        print(f"[RECON] 🔥 Port {port_override} - DEEP SCAN with vulnerability validation!")
+        print(f"[RECON] Overriding nmap args: {nmap_args_str}")
+        logger.info(f"[RECON] Deep scan enabled for port {port_override}")
+        logger.info(f"[RECON] Overriding nmap args: {nmap_args_str}")
+
+    
+    nm = nmap.PortScanner()
+    
+    try:
+        print(f"[RECON] Executing nmap scan on: {nmap_target}")
+        logger.info(f"[RECON] Executing nmap scan on: {nmap_target}")
+        nm.scan(nmap_target, arguments=nmap_args_str)
+        print(f"[RECON] Nmap scan completed successfully")
+        print(f"[RECON] Command line: {nm.command_line()}")
+        logger.info(f"[RECON] Nmap scan completed successfully")
+        logger.info(f"[RECON] Command line: {nm.command_line()}")
+    except Exception as e:
+        print(f"[RECON] ❌ Nmap scan failed: {e}")
+        logger.error(f"[RECON] Nmap scan failed: {e}")
+        return []
+    
+    all_hosts = nm.all_hosts()
+    print(f"[RECON] Hosts found: {len(all_hosts)}")
+    logger.info(f"[RECON] Hosts found: {len(all_hosts)}")
+    
+    if not all_hosts:
+        print(f"[RECON] ❌ No hosts found in scan result!")
+        print(f"[RECON] Target: {nmap_target}, Args: {nmap_args_str}")
+        print(f"[RECON] Nmap command: {nm.command_line()}")
+        logger.error(f"[RECON] No hosts found in scan result!")
+        logger.error(f"[RECON] Target: {nmap_target}, Args: {nmap_args_str}")
+        logger.error(f"[RECON] Nmap command: {nm.command_line()}")
+        return []
+    
+    hosts = []
+    
+    for host in all_hosts:
+        print(f"[RECON] Processing host: {host}")
+        logger.info(f"[RECON] Processing host: {host}")
+        
+        host_ip = mask_ip(host) if mask else host
+        host_data = {
+            "ip": host_ip,
+            "hostname": nm[host].hostname() or "",
+            "state": nm[host].state(),
+            "os": nm[host].get("osmatch", []),
+            "ports": []
+        }
+        
+        print(f"[RECON]   - State: {host_data['state']}")
+        print(f"[RECON]   - Hostname: {host_data['hostname']}")
+        logger.info(f"[RECON]   - State: {host_data['state']}")
+        logger.info(f"[RECON]   - Hostname: {host_data['hostname']}")
+        
+        protocols = nm[host].all_protocols()
+        print(f"[RECON]   - Protocols: {protocols}")
+        logger.info(f"[RECON]   - Protocols: {protocols}")
+        
+        if not protocols:
+            print(f"[RECON] ⚠️ No protocols found for host: {host}")
+            logger.warning(f"[RECON] No protocols found for host: {host}")
+        
+        for proto in protocols:
+            lport = nm[host][proto].keys()
+            print(f"[RECON]   - Protocol '{proto}': {len(lport)} ports")
+            logger.info(f"[RECON]   - Protocol '{proto}': {len(lport)} ports")
+            
+            for port in sorted(lport):
+                svc = nm[host][proto][port]
+                
+                service_name = svc.get("name", "")
+                product = svc.get("product", "")
+                version = svc.get("version", "")
+                
+                print(f"[RECON]     Port {port}: {service_name} {product} {version} (initial)")
+                logger.info(f"[RECON]     Port {port}: {service_name} {product} {version} (initial)")
+                
+                vulnerabilities = []
+                
+                if "script" in svc:
+                    print(f"[RECON]       - NSE scripts found: {len(svc['script'])}")
+                    logger.info(f"[RECON]       - NSE scripts found: {len(svc['script'])}")
+                    
+                    for script_name, script_output in svc["script"].items():
+                        print(f"[RECON]         Script: {script_name}")
+                        logger.info(f"[RECON]         Script: {script_name}")
+                        
+                        output_str = str(script_output)
+                        print(f"[RECON]         Output: {output_str[:300]}")
+                        logger.info(f"[RECON]         Output: {output_str[:200]}")
+                        
+                        # http-server-header 파싱
+                        if script_name == "http-server-header" and script_output:
+                            server_header = output_str.strip()
+                            print(f"[RECON]         ✓ Server header detected: {server_header}")
+                            logger.info(f"[RECON]         Server header: {server_header}")
+                            
+                            if server_header and (not product or product == ""):
+                                if "/" in server_header:
+                                    parts = server_header.split("/")
+                                    product = parts[0].strip()
+                                    version = parts[1].strip() if len(parts) > 1 else ""
+                                else:
+                                    product = server_header.strip()
+                                
+                                print(f"[RECON]         ✓ Extracted product={product}, version={version}")
+                                logger.info(f"[RECON]         Extracted product={product}, version={version}")
+                        
+                        # http-title 파싱
+                        elif script_name == "http-title" and script_output:
+                            title = output_str.strip()
+                            print(f"[RECON]         ✓ Page title: {title}")
+                            logger.info(f"[RECON]         Page title: {title}")
+                            
+                            if "juice shop" in title.lower():
+                                if not product or product == "":
+                                    product = "OWASP Juice Shop"
+                                    print(f"[RECON]         ✓ Detected Juice Shop from title")
+                                    logger.info(f"[RECON]         Detected Juice Shop")
+                                
+                                version_match = re.search(r'v?(\d+\.\d+\.\d+)', title)
+                                if version_match and not version:
+                                    version = version_match.group(1)
+                                    print(f"[RECON]         ✓ Version from title: {version}")
+                                    logger.info(f"[RECON]         Version from title: {version}")
+                        
+                        # http-headers 파싱
+                        elif script_name == "http-headers" and script_output:
+                            if "X-Powered-By" in output_str or "x-powered-by" in output_str.lower():
+                                powered_by_match = re.search(r'X-Powered-By[:\s]+([^\r\n]+)', output_str, re.IGNORECASE)
+                                if powered_by_match:
+                                    powered_by = powered_by_match.group(1).strip()
+                                    print(f"[RECON]         ✓ X-Powered-By: {powered_by}")
+                                    logger.info(f"[RECON]         X-Powered-By: {powered_by}")
+                                    
+                                    if not product or product == "":
+                                        if "/" in powered_by:
+                                            parts = powered_by.split("/")
+                                            product = parts[0].strip()
+                                            version = parts[1].strip() if len(parts) > 1 else ""
+                                        else:
+                                            product = powered_by.strip()
+                                        
+                                        print(f"[RECON]         ✓ From X-Powered-By: product={product}, version={version}")
+                                        logger.info(f"[RECON]         From X-Powered-By: product={product}, version={version}")
+                        
+                        # 취약점 스크립트 탐지
+                        is_vulnerable = False
+                        severity = "INFO"
+                        
+                        script_output_str = output_str.lower()
+                        if "vulnerable" in script_output_str or "vuln" in script_name.lower():
+                            is_vulnerable = True
+                            if "critical" in script_output_str or "high" in script_output_str:
+                                severity = "HIGH"
+                            elif "medium" in script_output_str:
+                                severity = "MEDIUM"
+                            else:
+                                severity = "LOW"
+                        
+                        vulnerabilities.append({
+                            "script_name": script_name,
+                            "output": script_output,
+                            "vulnerable": is_vulnerable,
+                            "severity": severity
+                        })
+                
+                full_version = parse_service_version(product, version)
+                print(f"[RECON]     ✓ Final Port {port}: {service_name} {product} {version}")
+                logger.info(f"[RECON]     Final: {service_name} {product} {version}")
+                
+                port_info = {
+                    "port": port,
+                    "protocol": proto,
+                    "state": svc.get("state", ""),
+                    "service": service_name,
+                    "product": product,
+                    "version": version,
+                    "full_version": full_version
+                }
+                
+                if vulnerabilities:
+                    port_info["nse_scripts"] = vulnerabilities
+                    port_info["has_vulnerabilities"] = any(v.get("vulnerable") for v in vulnerabilities)
+                
+                host_data["ports"].append(port_info)
+        
+        hosts.append(host_data)
+        print(f"[RECON] ✓ Host {host_ip}: {len(host_data['ports'])} ports added")
+        logger.info(f"[RECON] Host {host_ip}: {len(host_data['ports'])} ports added")
+    
+    print(f"[RECON] ✅ Scan completed: {len(hosts)} hosts, {sum(len(h['ports']) for h in hosts)} total ports")
+    logger.info(f"[RECON] Scan completed: {len(hosts)} hosts, {sum(len(h['ports']) for h in hosts)} total ports")
+    
+    return hosts
+
+
+def analyze_ssl_tls(target: str, port: int = 443) -> Dict[str, Any]:
+    """
+    SSL/TLS 상세 분석
+    
+    Returns:
+        {
+            "tls_version": "TLSv1.2",
+            "cipher": "...",
+            "certificate": {...}
+        }
+    """
+    ssl_info = {
+        "tls_version": None,
+        "cipher": None,
+        "certificate": {}
+    }
+    
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((target, port), timeout=5) as sock:
+            with context.wrap_socket(sock, server_hostname=target) as ssock:
+                ssl_info["tls_version"] = ssock.version()
+                ssl_info["cipher"] = ssock.cipher()
+                
+                cert = ssock.getpeercert()
+                if cert:
+                    ssl_info["certificate"] = {
+                        "subject": dict(x[0] for x in cert.get("subject", [])),
+                        "issuer": dict(x[0] for x in cert.get("issuer", [])),
+                        "version": cert.get("version"),
+                        "notAfter": cert.get("notAfter")
+                    }
+    except Exception as e:
+        logger.warning(f"SSL/TLS 분석 실패 ({target}:{port}): {e}")
+    
+    return ssl_info
+
+
+def analyze_ssh_details(target: str, port: int = 22) -> Dict[str, Any]:
+    """
+    SSH 상세 정보 분석
+    
+    Returns:
+        {
+            "version": "SSH-2.0-OpenSSH_7.4",
+            "key_exchange": [...],
+            "encryption": [...]
+        }
+    """
+    ssh_info = {
+        "version": None,
+        "key_exchange": [],
+        "encryption": []
+    }
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((target, port))
+        banner = sock.recv(1024).decode('utf-8', errors='ignore')
+        sock.close()
+        
+        ssh_info["version"] = banner.strip()
+    except Exception as e:
+        logger.warning(f"SSH 분석 실패 ({target}:{port}): {e}")
+    
+    return ssh_info
+
+
+def analyze_smb_details(target: str, port: int = 445) -> Dict[str, Any]:
+    """
+    SMB/Samba 상세 정보 분석
+    
+    Returns:
+        {
+            "version": "SMBv2",
+            "shares": [...]
+        }
+    """
+    smb_info = {
+        "version": None,
+        "shares": [],
+        "os_info": None
+    }
+    
+    # Nmap 스크립트를 통한 SMB 정보 수집은 별도 구현 필요
+    # 여기서는 기본 구조만 제공
+    return smb_info
+
+
+def analyze_ftp(target: str, port: int = 21) -> Dict[str, Any]:
+    """
+    FTP 배너 그랩핑 및 익명 접근 테스트
+    
+    Returns:
+        {
+            "version": "vsftpd 3.0.3",
+            "anonymous_access": True,
+            "banner": "..."
+        }
+    """
+    ftp_info = {
+        "version": None,
+        "anonymous_access": False,
+        "banner": None
+    }
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((target, port))
+        banner = sock.recv(1024).decode('utf-8', errors='ignore')
+        sock.close()
+        
+        ftp_info["banner"] = banner.strip()
+        
+        # 배너에서 버전 추출
+        version_match = re.search(r'([\w]+)\s*([\d.]+)', banner, re.IGNORECASE)
+        if version_match:
+            ftp_info["version"] = f"{version_match.group(1)} {version_match.group(2)}"
+        
+        # 익명 접근 테스트
+        try:
+            import ftplib
+            ftp = ftplib.FTP()
+            ftp.connect(target, port, timeout=5)
+            ftp.login('anonymous', 'anonymous@')
+            ftp_info["anonymous_access"] = True
+            ftp.quit()
+        except:
+            ftp_info["anonymous_access"] = False
+            
+    except Exception as e:
+        logger.warning(f"FTP 분석 실패 ({target}:{port}): {e}")
+    
+    return ftp_info
+
+
+def analyze_rdp(target: str, port: int = 3389) -> Dict[str, Any]:
+    """
+    RDP 버전 및 취약점 확인
+    
+    Returns:
+        {
+            "version": "RDP 10.0",
+            "nla_enabled": True,
+            "vulnerable": False
+        }
+    """
+    rdp_info = {
+        "version": None,
+        "nla_enabled": False,
+        "vulnerable": False
+    }
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((target, port))
+        
+        # RDP 핸드셰이크 패킷 전송
+        rdp_handshake = b'\x03\x00\x00\x13\x0e\xe0\x00\x00\x00\x00\x00\x01\x00\x08\x00\x03\x00\x00\x00'
+        sock.send(rdp_handshake)
+        response = sock.recv(1024)
+        sock.close()
+        
+        # 응답에서 버전 정보 추출 시도
+        if response:
+            rdp_info["version"] = "RDP Detected"
+            # NLA 활성화 여부는 더 복잡한 프로토콜 파싱 필요
+            # 여기서는 기본 구조만 제공
+            
+    except Exception as e:
+        logger.warning(f"RDP 분석 실패 ({target}:{port}): {e}")
+    
+    return rdp_info
+
+
+def analyze_snmp(target: str, port: int = 161) -> Dict[str, Any]:
+    """
+    SNMP 커뮤니티 스트링 브루트포싱
+    
+    Returns:
+        {
+            "community_strings": ["public", "private"],
+            "accessible": True
+        }
+    """
+    snmp_info = {
+        "community_strings": [],
+        "accessible": False
+    }
+    
+    common_strings = ['public', 'private', 'community', 'manager', 'admin']
+    
+    try:
+        import subprocess
+        for community in common_strings[:5]:  # 처음 5개만 테스트
+            try:
+                # snmpwalk 명령어로 테스트 (시스템에 snmpwalk가 설치되어 있어야 함)
+                result = subprocess.run(
+                    ['snmpwalk', '-v2c', '-c', community, target],
+                    timeout=3,
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    snmp_info["community_strings"].append(community)
+                    snmp_info["accessible"] = True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                continue
+    except Exception as e:
+        logger.warning(f"SNMP 분석 실패 ({target}:{port}): {e}")
+    
+    return snmp_info
+
+
+def collect_network_info(target: str, nm_scan_result) -> Dict[str, Any]:
+    """
+    네트워크 서비스 상세 정보 종합 수집
+    
+    Args:
+        target: 타겟 호스트
+        nm_scan_result: Nmap PortScanner 객체
+    
+    Returns:
+        {
+            "ssl_tls_info": {...},
+            "ssh_info": {...},
+            "smb_info": {...},
+            "network_technologies": [...]
+        }
+    """
+    logger.info("네트워크 서비스 상세 정보 수집 시작")
+    
+    network_technologies = []
+    
+    # SSL/TLS 정보
+    ssl_info = {}
+    try:
+        for host in nm_scan_result.all_hosts():
+            for proto in nm_scan_result[host].all_protocols():
+                ports = nm_scan_result[host][proto].keys()
+                for port in ports:
+                    if port in [443, 8443]:
+                        ssl_info = analyze_ssl_tls(host, port)
+                        if ssl_info.get("tls_version"):
+                            network_technologies.append({
+                                "type": "ssl_tls",
+                                "name": f"TLS {ssl_info['tls_version']}",
+                                "source": "SSL/TLS Analysis",
+                                "port": port
+                            })
+                        break
+    except Exception as e:
+        logger.warning(f"SSL/TLS 정보 수집 실패: {e}")
+    
+    # SSH 정보
+    ssh_info = {}
+    try:
+        for host in nm_scan_result.all_hosts():
+            for proto in nm_scan_result[host].all_protocols():
+                ports = nm_scan_result[host][proto].keys()
+                for port in ports:
+                    if port == 22:
+                        ssh_info = analyze_ssh_details(host, port)
+                        if ssh_info.get("version"):
+                            network_technologies.append({
+                                "type": "ssh",
+                                "name": ssh_info["version"],
+                                "source": "SSH Banner",
+                                "port": port
+                            })
+                        break
+    except Exception as e:
+        logger.warning(f"SSH 정보 수집 실패: {e}")
+    
+    # FTP 정보
+    ftp_info = {}
+    try:
+        for host in nm_scan_result.all_hosts():
+            for proto in nm_scan_result[host].all_protocols():
+                ports = nm_scan_result[host][proto].keys()
+                for port in ports:
+                    if port == 21:
+                        ftp_info = analyze_ftp(host, port)
+                        if ftp_info.get("version") or ftp_info.get("anonymous_access"):
+                            network_technologies.append({
+                                "type": "ftp",
+                                "name": ftp_info.get("version", "FTP"),
+                                "source": "FTP Analysis",
+                                "port": port,
+                                "anonymous_access": ftp_info.get("anonymous_access", False)
+                            })
+                        break
+    except Exception as e:
+        logger.warning(f"FTP 정보 수집 실패: {e}")
+    
+    # RDP 정보
+    rdp_info = {}
+    try:
+        for host in nm_scan_result.all_hosts():
+            for proto in nm_scan_result[host].all_protocols():
+                ports = nm_scan_result[host][proto].keys()
+                for port in ports:
+                    if port == 3389:
+                        rdp_info = analyze_rdp(host, port)
+                        if rdp_info.get("version"):
+                            network_technologies.append({
+                                "type": "rdp",
+                                "name": rdp_info.get("version", "RDP"),
+                                "source": "RDP Analysis",
+                                "port": port
+                            })
+                        break
+    except Exception as e:
+        logger.warning(f"RDP 정보 수집 실패: {e}")
+    
+    # SNMP 정보
+    snmp_info = {}
+    try:
+        for host in nm_scan_result.all_hosts():
+            for proto in nm_scan_result[host].all_protocols():
+                ports = nm_scan_result[host][proto].keys()
+                for port in ports:
+                    if port == 161:
+                        snmp_info = analyze_snmp(host, port)
+                        if snmp_info.get("accessible"):
+                            network_technologies.append({
+                                "type": "snmp",
+                                "name": f"SNMP (Community: {', '.join(snmp_info.get('community_strings', []))})",
+                                "source": "SNMP Analysis",
+                                "port": port,
+                                "accessible": True
+                            })
+                        break
+    except Exception as e:
+        logger.warning(f"SNMP 정보 수집 실패: {e}")
+    
+    return {
+        "ssl_tls_info": ssl_info,
+        "ssh_info": ssh_info,
+        "ftp_info": ftp_info,
+        "rdp_info": rdp_info,
+        "snmp_info": snmp_info,
+        "network_technologies": network_technologies
+    }
+
+def sanitize_target_for_nmap(target: str) -> tuple:
+    """
+    타겟 주소를 Nmap용과 웹용으로 분리 정제
+    
+    Args:
+        target: 원본 타겟 (http://localhost:3000, 192.168.1.1, example.com)
+        
+    Returns:
+        (nmap_target, web_target, port) 튜플
+    """
+    original_target = target
+    port = None
+    
+    # HTTP/HTTPS 프로토콜 제거
+    target_clean = target.replace("http://", "").replace("https://", "")
+    
+    # 경로 제거 (example.com/path -> example.com)
+    if "/" in target_clean:
+        target_clean = target_clean.split("/")[0]
+    
+    # 포트 분리
+    if ":" in target_clean:
+        host, port_str = target_clean.rsplit(":", 1)
+        try:
+            port = int(port_str)
+            target_clean = host
+        except ValueError:
+            # 포트가 아니면 (IPv6 등) 그대로 유지
+            pass
+    
+    # Nmap용 타겟
+    nmap_target = target_clean
+    
+    # 웹용 타겟 (프로토콜 포함)
+    if not original_target.startswith("http"):
+        if port == 443 or port == 8443:
+            web_target = f"https://{target_clean}"
+        else:
+            web_target = f"http://{target_clean}"
+        
+        if port and port not in [80, 443]:
+            web_target = f"{web_target}:{port}"
+    else:
+        web_target = original_target
+    
+    logger.info(f"[TARGET] Original: {original_target}")
+    logger.info(f"[TARGET] Nmap: {nmap_target} | Web: {web_target} | Port: {port}")
+    
+    return nmap_target, web_target, port
