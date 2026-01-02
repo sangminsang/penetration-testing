@@ -1,7 +1,8 @@
 # app/core/recon/web.py
 # 웹 애플리케이션 정보 수집 모듈 (완전 자동화 버전)
 # ffuf, dirsearch, whatweb, wappalyzer 통합
-
+import tempfile
+import shutil
 import requests
 import re
 import logging
@@ -14,6 +15,8 @@ from urllib.parse import urljoin, urlparse
 from Wappalyzer import Wappalyzer, WebPage
 import requests
 from playwright.sync_api import sync_playwright
+from .scanner_integrations import NucleiScanner, HttpxScanner, RetireJsScanner
+from .technologies import detect_backend_technologies
 
 logger = logging.getLogger(__name__)
 
@@ -174,13 +177,16 @@ def discover_endpoints_with_ffuf(target: str) -> List[Dict[str, Any]]:
 
 def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    엔드포인트에서 기술 스택 버전 정보 추출
-    - Juice Shop 우회 경로 추가
-    - 리다이렉트 방어 대응
-    - 백업 파일 탐색
+    엔드포인트에서 기술 스택 버전 정보 추출 (완전 자동화)
+    - Juice Shop 우회 경로
+    - phpinfo/info.php 자동 탐지
+    - 동적 SQL Injection (발견된 엔드포인트 기반)
     """
     technologies = []
     
+    # ===================================================================
+    # 1. package.json 파싱 (기존 코드 유지)
+    # ===================================================================
     for endpoint in endpoints:
         url = endpoint.get("url", "")
         path = endpoint.get("path", "").lower()
@@ -190,51 +196,45 @@ def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]])
             continue
         
         try:
-            # ===================================================================
-            # 1. package.json 파싱 (Juice Shop 우회 경로 추가)
-            # ===================================================================
             if "package.json" in path:
                 print(f"[WEB] 🔍 Trying multiple package.json paths (Juice Shop bypass)...")
                 
-                # 🔥 실전 우회 경로 (CTF/모의해킹 기법)
                 package_paths = [
                     "/package.json",
-                    "/ftp/package.json",              # Juice Shop FTP 경로
-                    "/ftp/package.json.bak",          # 🔥 백업 파일 실수
-                    "/ftp/package.json~",             # 🔥 Vim 백업 파일
-                    "/api/package.json",              # 🔥 API 경로 노출
-                    "/%2e%2e/package.json",           # 🔥 URL 인코딩 우회 (../)
-                    "/%2e%2e%2fpackage.json",         # 🔥 ../package.json 인코딩
+                    "/ftp/package.json",
+                    "/ftp/package.json.bak",
+                    "/ftp/package.json~",
+                    "/api/package.json",
+                    "/%2e%2e/package.json",
+                    "/%2e%2e%2fpackage.json",
                     "/assets/package.json",
                     "/../package.json",
                     "/static/package.json",
                     "/public/package.json",
                     "/dist/package.json",
                     "/.git/../package.json",
-                    "/node_modules/../package.json",  # 🔥 Node.js 경로 추측
-                    "/backup/package.json",           # 🔥 일반적인 백업 디렉토리
-                    "/old/package.json",              # 🔥 구버전 디렉토리
-                    "/v1/package.json",               # 🔥 버전 관리 디렉토리
+                    "/node_modules/../package.json",
+                    "/backup/package.json",
+                    "/old/package.json",
+                    "/v1/package.json",
                 ]
                 
                 session = requests.Session()
                 session.headers.update({
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "application/json, text/plain, */*",  # 🔥 JSON 우선 요청
+                    "Accept": "application/json, text/plain, */*",
                 })
                 
                 found = False
-                
                 for alt_path in package_paths:
                     try:
                         alt_url = f"{target}{alt_path}"
                         print(f"[WEB] Attempting: {alt_url}")
                         
-                        # 🔥 리다이렉트 비활성화 (Juice Shop 대응)
                         resp = session.get(
-                            alt_url, 
-                            allow_redirects=False,  # 🔥 중요: 리다이렉트 차단
-                            timeout=10, 
+                            alt_url,
+                            allow_redirects=False,
+                            timeout=10,
                             verify=False
                         )
                         
@@ -243,67 +243,46 @@ def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]])
                         
                         print(f"[WEB] Response: {resp.status_code}, Content-Type: {content_type}, Size: {content_length} bytes")
                         
-                        # 🔥 리다이렉트 탐지 및 로깅
                         if resp.status_code in [301, 302, 303, 307, 308]:
                             redirect_location = resp.headers.get('Location', 'unknown')
                             print(f"[WEB] ⚠️ Redirect detected: {resp.status_code} -> {redirect_location}")
-                            print(f"[WEB] 💡 Juice Shop is redirecting package.json to HTML page (defense mechanism)")
                             continue
                         
-                        # 🔥 200 OK만 처리
                         if resp.status_code == 200:
-                            # 🔥 응답 크기 체크 (HTML 페이지 필터링)
-                            if content_length > 100000:  # 100KB 이상이면 의심
-                                print(f"[WEB] ✗ Response too large ({content_length} bytes) - likely HTML page, not JSON")
+                            if content_length > 100000:
+                                print(f"[WEB] ✗ Response too large ({content_length} bytes) - likely HTML page")
                                 continue
                             
-                            # 🔥 Content-Type이 HTML이면 스킵 (확실한 리다이렉트 결과)
                             if 'text/html' in content_type.lower() and content_length > 10000:
                                 print(f"[WEB] ✗ Content-Type is HTML and large size - skipping")
                                 continue
                             
-                            # 🔥 무조건 JSON 파싱 시도
                             try:
                                 pkg_data = resp.json()
                                 
-                                # 🔥 JSON이지만 package.json이 아닌 경우 체크
                                 if not isinstance(pkg_data, dict):
-                                    print(f"[WEB] ✗ Response is not a JSON object")
                                     continue
                                 
-                                # dependencies 확인
                                 if 'dependencies' in pkg_data or 'devDependencies' in pkg_data:
                                     print(f"[WEB] ✅ Found valid package.json at: {alt_path}")
-                                    print(f"[WEB] 🎯 Juice Shop bypass successful! Path: {alt_path}")
                                     
-                                    # 기본 정보 추출
                                     pkg_name = pkg_data.get('name', 'Unknown')
                                     pkg_version = pkg_data.get('version', 'Unknown')
                                     print(f"[WEB] 📦 Package: {pkg_name} v{pkg_version}")
                                     
-                                    # Express, Angular 등 추출
                                     deps = pkg_data.get('dependencies', {})
                                     dev_deps = pkg_data.get('devDependencies', {})
                                     all_deps = {**deps, **dev_deps}
                                     
-                                    # 🔥 중요 패키지 확장 (더 많은 기술 스택 탐지)
                                     important_packages = [
-                                        # Backend Frameworks
                                         'express', 'koa', 'fastify', 'nest', 'hapi',
-                                        # Frontend Frameworks
-                                        'angular', '@angular/core', '@angular/cli',
+                                        'angular', '@angular/core', '@angular/cli', 
                                         'react', 'react-dom', 'vue', 'next', 'nuxt', 'svelte',
-                                        # Database & ORM
                                         'sequelize', 'mongoose', 'typeorm', 'prisma', 'knex',
-                                        # Authentication
                                         'passport', 'jsonwebtoken', 'bcrypt', 'express-jwt',
-                                        # Security
                                         'helmet', 'cors', 'express-rate-limit',
-                                        # Testing
                                         'jest', 'mocha', 'chai', 'cypress', 'protractor',
-                                        # Build Tools
                                         'webpack', 'vite', 'rollup', 'parcel',
-                                        # Other
                                         'socket.io', 'axios', 'dotenv', 'express-session'
                                     ]
                                     
@@ -312,7 +291,6 @@ def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]])
                                         if any(imp in pkg_name.lower() for imp in important_packages):
                                             clean_version = version.strip().lstrip('^~>=<')
                                             
-                                            # 카테고리 판별
                                             category = 'other'
                                             if any(x in pkg_name.lower() for x in ['express', 'koa', 'fastify', 'nest', 'hapi']):
                                                 category = 'backend'
@@ -335,52 +313,40 @@ def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]])
                                                 "product": pkg_name,
                                                 "category": category,
                                                 "language": "JavaScript",
-                                                "source": f"package.json:{alt_path}"  # 🔥 어느 경로에서 찾았는지 기록
+                                                "source": f"package.json:{alt_path}",
+                                                "type": "detected",
+                                                "vulnerable": False,
+                                                "vulnerabilities": []
                                             })
-                                            print(f"[WEB] 📦 {pkg_name}: {clean_version} [{category}] (from {alt_path})")
+                                            print(f"[WEB] 📦 {pkg_name}: {clean_version} [{category}]")
                                             found_count += 1
                                     
                                     print(f"[WEB] ✅ Total {found_count} packages extracted from package.json")
                                     found = True
-                                    break  # 성공하면 루프 종료
-                                    
-                                elif 'name' in pkg_data:
-                                    # package.json이지만 dependencies가 없는 경우
-                                    print(f"[WEB] ⚠️ Found package.json but no dependencies at {alt_path}")
-                                else:
-                                    print(f"[WEB] ✗ JSON response but not a valid package.json")
+                                    break
                                     
                             except json.JSONDecodeError as e:
-                                print(f"[WEB] ✗ Invalid JSON at {alt_path}: {str(e)[:100]}")
-                                # 🔥 디버깅: 응답 일부 출력
-                                preview = resp.text[:200].replace('\n', ' ')
-                                print(f"[WEB] 📄 Response preview: {preview}...")
+                                print(f"[WEB] ✗ Invalid JSON at {alt_path}")
                                 continue
-                        
+                                
                     except requests.Timeout:
-                        print(f"[WEB] ⏱️ Timeout for {alt_path}")
-                        continue
-                    except requests.ConnectionError:
-                        print(f"[WEB] 🔌 Connection error for {alt_path}")
                         continue
                     except Exception as e:
-                        print(f"[WEB] ✗ Error fetching {alt_path}: {str(e)[:100]}")
                         continue
                 
                 if not found:
                     print(f"[WEB] ❌ package.json not accessible from any path")
-                    print(f"[WEB] 💡 Juice Shop defense is active - all attempts blocked/redirected")
             
             # ===================================================================
-            # 2. application-version 엔드포인트
+            # 2. application-version 엔드포인트 (기존 유지)
             # ===================================================================
             elif "application-version" in path or ("version" in path and "api" not in path):
                 print(f"[WEB] 🔍 Fetching version from {url}...")
                 try:
                     response = requests.get(
-                        url, 
-                        timeout=5, 
-                        verify=False, 
+                        url,
+                        timeout=5,
+                        verify=False,
                         headers={"User-Agent": DEFAULT_USER_AGENT}
                     )
                     
@@ -389,76 +355,127 @@ def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]])
                             version_data = response.json()
                             if isinstance(version_data, dict):
                                 if "version" in version_data:
+                                    extracted_version = str(version_data["version"])
+                                    
+                                    if re.match(r'^\d{1,2}\.\d+\.\d+$', extracted_version):
+                                        product_name = "OWASP Juice Shop"
+                                        print(f"[WEB] 🎯 Detected OWASP Juice Shop version: {extracted_version}")
+                                    else:
+                                        product_name = "Application"
+                                    
                                     technologies.append({
-                                        "name": "Application",
-                                        "version": str(version_data["version"]),
-                                        "product": "Application",
+                                        "name": product_name,
+                                        "version": extracted_version,
+                                        "product": product_name,
                                         "category": "application",
                                         "language": None,
-                                        "source": "api:version-endpoint"
+                                        "source": "api:version-endpoint",
+                                        "type": "detected",
+                                        "vulnerable": False,
+                                        "vulnerabilities": []
                                     })
-                                    print(f"[WEB] ✅ Version: {version_data['version']}")
+                                    print(f"[WEB] ✅ {product_name} Version: {extracted_version}")
+                                    
                         except:
-                            # JSON 파싱 실패 시 정규표현식으로 버전 추출
                             version_match = re.search(r'(\d+\.\d+\.\d+)', response.text)
                             if version_match:
+                                extracted_version = version_match.group(1)
+                                
+                                if re.match(r'^\d{1,2}\.\d+\.\d+$', extracted_version):
+                                    product_name = "OWASP Juice Shop"
+                                else:
+                                    product_name = "Application"
+                                
                                 technologies.append({
-                                    "name": "Application",
-                                    "version": version_match.group(1),
-                                    "product": "Application",
+                                    "name": product_name,
+                                    "version": extracted_version,
+                                    "product": product_name,
                                     "category": "application",
                                     "language": None,
-                                    "source": "api:version-endpoint"
+                                    "source": "api:version-endpoint",
+                                    "type": "detected",
+                                    "vulnerable": False,
+                                    "vulnerabilities": []
                                 })
-                                print(f"[WEB] ✅ Version: {version_match.group(1)}")
+                                print(f"[WEB] ✅ {product_name} Version: {extracted_version}")
                                 
                 except Exception as e:
                     print(f"[WEB] ✗ Error fetching version: {e}")
             
             # ===================================================================
-            # 3. API 에러 메시지에서 기술 스택 추출
+            # 3. API 에러 메시지 분석 (기존 유지)
             # ===================================================================
             elif "api" in path and status == 500:
                 print(f"[WEB] 🔍 Analyzing API error at {url}...")
                 try:
                     response = requests.get(
-                        url, 
-                        timeout=5, 
-                        verify=False, 
+                        url,
+                        timeout=5,
+                        verify=False,
                         headers={"User-Agent": DEFAULT_USER_AGENT}
                     )
-                    
                     error_text = response.text.lower()
                     
-                    # Express 탐지
                     if "express" in error_text:
-                        technologies.append({
-                            "name": "Express",
-                            "version": "",
-                            "product": "Express",
-                            "category": "backend",
-                            "language": "JavaScript",
-                            "source": "api:error-message"
-                        })
-                        print(f"[WEB] ✅ Detected Express from error message")
+                        if not any(t.get('name') == 'Express' for t in technologies):
+                            technologies.append({
+                                "name": "Express",
+                                "version": "",
+                                "product": "Express",
+                                "category": "backend",
+                                "language": "JavaScript",
+                                "source": "api:error-message",
+                                "type": "detected",
+                                "vulnerable": False,
+                                "vulnerabilities": []
+                            })
+                            print(f"[WEB] ✅ Detected Express from error message")
                     
-                    # Node.js 버전 탐지
-                    if "node" in error_text:
-                        node_match = re.search(r'node.?v?(\d+\.\d+\.\d+)', response.text, re.IGNORECASE)
-                        if node_match:
+                    node_patterns = [
+                        r'node[:\s]+v?(\d+\.\d+\.\d+)',
+                        r'Node\.js[:\s]+v?(\d+\.\d+\.\d+)',
+                        r'process\.version[:\s=]+["\']?v?(\d+\.\d+\.\d+)',
+                    ]
+                    
+                    node_found = False
+                    for pattern in node_patterns:
+                        node_match = re.search(pattern, response.text, re.IGNORECASE)
+                        if node_match and node_match.groups():
+                            node_version = node_match.group(1).strip('v')
+                            
+                            if not any(t.get('name') == 'Node.js' for t in technologies):
+                                technologies.append({
+                                    "name": "Node.js",
+                                    "version": node_version,
+                                    "product": "Node.js",
+                                    "category": "runtime",
+                                    "language": "JavaScript",
+                                    "source": "api:error-stack",
+                                    "type": "detected",
+                                    "vulnerable": False,
+                                    "vulnerabilities": []
+                                })
+                                print(f"[WEB] ✅ Node.js v{node_version}")
+                                node_found = True
+                            break
+                    
+                    if not node_found and ('node' in error_text or 'node:internal' in error_text):
+                        if not any(t.get('name') == 'Node.js' for t in technologies):
                             technologies.append({
                                 "name": "Node.js",
-                                "version": node_match.group(1),
+                                "version": "",
                                 "product": "Node.js",
                                 "category": "runtime",
                                 "language": "JavaScript",
-                                "source": "api:error-message"
+                                "source": "api:error-stack",
+                                "type": "detected",
+                                "vulnerable": False,
+                                "vulnerabilities": []
                             })
-                            print(f"[WEB] ✅ Node.js version: {node_match.group(1)}")
+                            print(f"[WEB] ✅ Node.js detected (version unknown)")
                     
-                    # 추가: Stack trace에서 더 많은 정보 추출
                     stack_patterns = [
-                        (r'at\s+(\w+)\s+\(.*?node_modules/([^/]+)', 'dependency'),  # Stack trace에서 패키지명
+                        (r'at\s+(\w+)\s+\(.*?node_modules/([^/]+)', 'dependency'),
                         (r'Error:\s+.*?(\w+)\s+is not defined', 'missing-module'),
                     ]
                     
@@ -466,14 +483,312 @@ def extract_version_from_endpoints(target: str, endpoints: List[Dict[str, Any]])
                         matches = re.findall(pattern, response.text, re.IGNORECASE)
                         if matches:
                             print(f"[WEB] 📝 Found {len(matches)} {info_type} references in error")
-                            
+                    
                 except Exception as e:
                     print(f"[WEB] ✗ Error analyzing API error: {e}")
         
         except Exception as e:
-            print(f"[WEB] ⚠️ Unexpected error in endpoint processing: {e}")
             continue
     
+    # ===================================================================
+    # 🆕 4. phpinfo/info.php 자동 탐지 및 파싱
+    # ===================================================================
+    print(f"\n[WEB] 🔍 Scanning for information disclosure pages...")
+    
+    info_pages = [
+        '/phpinfo.php',
+        '/info.php',
+        '/test.php',
+        '/phpinfo',
+        '/info',
+        '/.env',
+        '/config.php.bak',
+        '/configuration.php',
+        '/server-info',
+    ]
+    
+    for info_page in info_pages:
+        try:
+            info_url = f"{target}{info_page}"
+            response = requests.get(info_url, timeout=3, verify=False, headers={"User-Agent": DEFAULT_USER_AGENT})
+            
+            if response.status_code == 200:
+                # phpinfo() 탐지 (대소문자 무관)
+                if 'php version' in response.text.lower() and len(response.text) > 5000:
+                    print(f"[WEB] ✅ Found phpinfo at: {info_page}")
+                    print(f"[WEB] 🎯 Parsing phpinfo output for tech stack...")
+                    
+                    html = response.text.lower()
+                    
+                    # MySQL 버전 추출
+                    mysql_patterns = [
+                        r'mysql.*?client.*?api version.*?(\d+\.\d+\.\d+)',
+                        r'mysqli.*?client version.*?(\d+\.\d+\.\d+)',
+                        r'pdo_mysql.*?client version.*?(\d+\.\d+\.\d+)',
+                        r'mysqlnd.*?(\d+\.\d+\.\d+)',
+                    ]
+                    
+                    for pattern in mysql_patterns:
+                        mysql_match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
+                        if mysql_match:
+                            mysql_version = mysql_match.group(1)
+                            if not any(t.get('name') == 'MySQL' for t in technologies):
+                                technologies.append({
+                                    "name": "MySQL",
+                                    "version": mysql_version,
+                                    "product": "MySQL",
+                                    "category": "database",
+                                    "language": None,
+                                    "source": f"phpinfo:{info_page}",
+                                    "type": "detected",
+                                    "vulnerable": False,
+                                    "vulnerabilities": []
+                                })
+                                print(f"[WEB] ✅ MySQL v{mysql_version} (from phpinfo)")
+                            break
+                    
+                    # PostgreSQL
+                    pgsql_match = re.search(r'postgresql.*?(\d+\.\d+)', html, re.IGNORECASE)
+                    if pgsql_match:
+                        pgsql_version = pgsql_match.group(1)
+                        if not any(t.get('name') == 'PostgreSQL' for t in technologies):
+                            technologies.append({
+                                "name": "PostgreSQL",
+                                "version": pgsql_version,
+                                "product": "PostgreSQL",
+                                "category": "database",
+                                "language": None,
+                                "source": f"phpinfo:{info_page}",
+                                "type": "detected",
+                                "vulnerable": False,
+                                "vulnerabilities": []
+                            })
+                            print(f"[WEB] ✅ PostgreSQL v{pgsql_version} (from phpinfo)")
+                    
+                    # PHP 정확한 버전 (재확인)
+                    php_match = re.search(r'php version[:\s]+(\d+\.\d+\.\d+[^\s<]*)', html)
+                    if php_match:
+                        php_version = php_match.group(1)
+                        print(f"[WEB] ℹ️ PHP v{php_version} confirmed from phpinfo")
+                    
+                    # Apache 모듈 정보
+                    apache_match = re.search(r'apache/(\d+\.\d+\.\d+)', html)
+                    if apache_match:
+                        apache_version = apache_match.group(1)
+                        print(f"[WEB] ℹ️ Apache v{apache_version} confirmed from phpinfo")
+                    
+                    # Linux 배포판 정보
+                    linux_match = re.search(r'system.*?(ubuntu|debian|centos|fedora|rhel).*?(\d+\.\d+)?', html, re.IGNORECASE)
+                    if linux_match:
+                        linux_distro = linux_match.group(1).capitalize()
+                        linux_version = linux_match.group(2) if linux_match.group(2) else ''
+                        print(f"[WEB] ℹ️ Linux: {linux_distro} {linux_version} (from phpinfo)")
+                    
+                    break  # phpinfo 찾았으면 다른 페이지 스캔 중단
+                    
+        except Exception as e:
+            continue
+    
+    # ===================================================================
+    # 🆕 5. 동적 SQL Injection - 발견된 엔드포인트 기반
+    # ===================================================================
+    print(f"\n[WEB] 🔍 Dynamic SQL Injection testing on discovered endpoints...")
+    
+    sqli_candidates = []
+    
+    # 5.1 발견된 엔드포인트에서 SQL Injection 대상 추출
+    for endpoint in endpoints:
+        path = endpoint.get("path", "")
+        url = endpoint.get("url", "")
+        
+        # PHP 파일 우선 타겟팅
+        if path.endswith('.php'):
+            if '?' in path:
+                # 기존 쿼리스트링에 ' 추가
+                sqli_candidates.append({
+                    "url": url + "'",
+                    "path": path + "'",
+                    "method": "existing-query"
+                })
+            else:
+                # 일반적인 파라미터 추가
+                common_params = ['id', 'title', 'movie', 'search', 'q', 'query', 'user', 'name', 'cat', 'category']
+                for param in common_params[:3]:  # 최대 3개 파라미터만
+                    sqli_candidates.append({
+                        "url": f"{url}?{param}=1'",
+                        "path": f"{path}?{param}=1'",
+                        "method": "generated-param"
+                    })
+        
+        # API 엔드포인트
+        elif '/api/' in path or '/rest/' in path:
+            sqli_candidates.append({
+                "url": url + "'",
+                "path": path + "'",
+                "method": "restful-api"
+            })
+    
+    print(f"[WEB] 📊 Found {len(sqli_candidates)} SQL injection candidates from endpoints")
+    
+    # 5.2 fallback 패턴 (발견된 엔드포인트 없을 때)
+    if len(sqli_candidates) == 0:
+        print(f"[WEB] 💡 No endpoints found, using common SQL injection patterns...")
+        
+        common_patterns = [
+            # Juice Shop
+            "/rest/products/search?q=apple'",
+            "/api/Products/1'",
+            # bWAPP
+            "/sqli_1.php?title=test'",
+            "/sqli_2.php?movie=1'",
+            "/sqli_3.php?order=title'",
+            # DVWA
+            "/vulnerabilities/sqli/?id=1'",
+            # Generic
+            "/search.php?q=test'",
+            "/product.php?id=1'",
+            "/index.php?id=1'",
+        ]
+        
+        for pattern in common_patterns:
+            sqli_candidates.append({
+                "url": f"{target}{pattern}",
+                "path": pattern,
+                "method": "common-pattern"
+            })
+    
+    # 5.3 SQL Injection 테스트 실행
+    tested_count = 0
+    max_tests = 10  # 성능을 위해 최대 10개만 테스트
+    db_found = False
+    
+    for candidate in sqli_candidates[:max_tests]:
+        if db_found:  # 이미 DB 찾았으면 중단
+            break
+            
+        tested_count += 1
+        sqli_url = candidate["url"]
+        sqli_path = candidate["path"]
+        method = candidate["method"]
+        
+        try:
+            print(f"[WEB] [{tested_count}/{min(len(sqli_candidates), max_tests)}] Testing: {sqli_path}")
+            
+            response = requests.get(
+                sqli_url,
+                timeout=5,
+                verify=False,
+                headers={"User-Agent": DEFAULT_USER_AGENT}
+            )
+            
+            error_text = response.text
+            error_lower = error_text.lower()
+            
+            print(f"[WEB]   Status: {response.status_code}")
+            
+            # 5.4 데이터베이스 시그니처 탐지
+            db_signatures = {
+                'MySQL': ['mysql', 'mysqli', 'mariadb', 'you have an error in your sql syntax', 'check the manual that corresponds to your mysql'],
+                'PostgreSQL': ['postgresql', 'pg_query', 'psql', 'unterminated quoted string', 'pg_'],
+                'Microsoft SQL Server': ['microsoft sql server', 'mssql', 'syntax error near', 'unclosed quotation mark'],
+                'Oracle': ['oracle', 'ora-', 'pl/sql', 'ora-01756'],
+                'SQLite': ['sqlite', 'sqlite_error', 'sqlite3', 'near "%s": syntax error'],
+            }
+            
+            for db_name, keywords in db_signatures.items():
+                if any(keyword in error_lower for keyword in keywords):
+                    print(f"[WEB] 🎯 {db_name} detected via SQL error!")
+                    
+                    # 버전 추출
+                    version_patterns = {
+                        'MySQL': [
+                            r'mysql[:\s]+v?(\d+\.\d+\.\d+)',
+                            r'server version:\s*(\d+\.\d+\.\d+)',
+                            r'mysql server version.*?(\d+\.\d+)',
+                        ],
+                        'PostgreSQL': [
+                            r'postgresql[:\s]+v?(\d+\.\d+)',
+                        ],
+                        'Microsoft SQL Server': [
+                            r'microsoft sql server.*?(\d+)',
+                        ],
+                        'SQLite': [
+                            r'sqlite[:\s]+v?(\d+\.\d+\.\d+)',
+                        ],
+                    }
+                    
+                    db_version = ''
+                    if db_name in version_patterns:
+                        for pattern in version_patterns[db_name]:
+                            match = re.search(pattern, error_text, re.IGNORECASE)
+                            if match and match.groups():
+                                db_version = match.group(1)
+                                print(f"[WEB]   Extracted version: {db_version}")
+                                break
+                    
+                    # 중복 체크 후 추가
+                    if not any(t.get('name') == db_name for t in technologies):
+                        technologies.append({
+                            "name": db_name,
+                            "version": db_version,
+                            "product": db_name,
+                            "category": "database",
+                            "language": None,
+                            "source": f"sqli:error-based ({method})",
+                            "type": "detected",
+                            "vulnerable": False,
+                            "vulnerabilities": []
+                        })
+                        
+                        if db_version:
+                            print(f"[WEB] ✅ {db_name} v{db_version} (via SQL Injection on {method})")
+                        else:
+                            print(f"[WEB] ✅ {db_name} detected (via SQL Injection on {method})")
+                        
+                        db_found = True
+                        print(f"[WEB] 🎉 Database detected! Stopping further SQL injection tests.")
+                        break
+            
+            # Express 버전 추출 (에러 페이지에서)
+            if not db_found:  # DB는 못 찾았지만 Express는 찾을 수 있음
+                express_match = re.search(r'Express\s+\^?(\d+\.\d+\.\d+)', error_text, re.IGNORECASE)
+                if express_match:
+                    express_version = express_match.group(1)
+                    print(f"[WEB] 🎯 Express version found in error page!")
+                    
+                    for tech in technologies:
+                        if tech.get('name') == 'Express' and not tech.get('version'):
+                            tech['version'] = express_version
+                            tech['source'] = 'sqli:error-page'
+                            print(f"[WEB] ✅ Updated Express version to v{express_version}")
+                            break
+                    else:
+                        if not any(t.get('name') == 'Express' for t in technologies):
+                            technologies.append({
+                                "name": "Express",
+                                "version": express_version,
+                                "product": "Express",
+                                "category": "backend",
+                                "language": "JavaScript",
+                                "source": "sqli:error-page",
+                                "type": "detected",
+                                "vulnerable": False,
+                                "vulnerabilities": []
+                            })
+                            print(f"[WEB] ✅ Express v{express_version} (via SQL Injection)")
+                
+        except requests.Timeout:
+            print(f"[WEB]   ⏱️ Timeout - skipping")
+            continue
+        except Exception as e:
+            continue
+    
+    if tested_count == 0:
+        print(f"[WEB] ⚠️ No SQL injection tests performed")
+    elif not db_found:
+        print(f"[WEB] ℹ️ No database detected from {tested_count} SQL injection attempts")
+    
+    print(f"[WEB] ✅ Extracted {len(technologies)} technologies from endpoints")
     return technologies
 
 def detect_with_wappalyzer(target: str) -> List[Dict[str, Any]]:
@@ -530,136 +845,701 @@ def detect_with_wappalyzer(target: str) -> List[Dict[str, Any]]:
     
     return technologies
 
-
 def detect_with_whatweb(target: str) -> List[Dict[str, Any]]:
-    """WhatWeb으로 기술 스택 감지"""
+    """
+    [수정됨] WhatWeb 실행 및 파싱 
+    - 화면 출력 대신 임시 파일(--log-json=file)을 사용하여 IOError 및 파싱 에러 회피
+    """
     technologies = []
+    
+    # WhatWeb 경로 설정 (윈도우/리눅스 호환)
+    whatweb_bin = shutil.which("whatweb")
+    if not whatweb_bin and os.path.exists(r"D:\tools\WhatWeb\whatweb"):
+        whatweb_bin = r"D:\tools\WhatWeb\whatweb"
+    
+    if not whatweb_bin:
+        # 루비로 직접 실행 시도
+        if shutil.which("ruby") and os.path.exists(r"D:\tools\WhatWeb\whatweb"):
+            whatweb_bin = r"D:\tools\WhatWeb\whatweb"
+            is_ruby_script = True
+        else:
+            print("[WEB] WhatWeb binary not found.")
+            return []
+    else:
+        is_ruby_script = False
+
+    # 안전하게 임시 파일 생성
+    fd, output_file = tempfile.mkstemp(suffix='.json')
+    os.close(fd)
+    
     try:
-        print(f"[WEB] Running WhatWeb...")
-        result = subprocess.run(
-            ['whatweb', '--log-json=-', '--color=never', '--no-errors', target],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        cmd = []
+        if is_ruby_script:
+            cmd = ["ruby", whatweb_bin]
+        else:
+            cmd = [whatweb_bin]
+            
+        # [중요] 파일로 로그 저장 옵션 사용 (--log-json=FILE)
+        cmd.extend([f"--log-json={output_file}", "-a", "3", "--no-errors", target])
         
-        if result.returncode == 0 and result.stdout:
-            for line in result.stdout.strip().split('\n'):
-                if not line.strip():
-                    continue
-                try:
-                    data = json.loads(line)
-                    plugins = data.get('plugins', {})
-                    
-                    for plugin_name, plugin_data in plugins.items():
-                        version = ""
-                        if isinstance(plugin_data, dict):
-                            version_list = plugin_data.get('version', [])
-                            if isinstance(version_list, list) and len(version_list) > 0:
-                                version = str(version_list[0])
-                            elif isinstance(version_list, str):
-                                version = version_list
+        # 실행 (stdout은 무시하여 잡음 제거)
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        
+        # 결과 파일 읽기
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            if isinstance(data, list) and len(data) > 0:
+                plugins = data[0].get('plugins', {})
+                for name, info in plugins.items():
+                    version = ""
+                    if 'string' in info: version = info['string'][0]
+                    elif 'version' in info: version = info['version'][0]
                         
-                        # 🆕 이름에서 버전 분리
-                        clean_name = plugin_name
-                        if not version:
-                            # 이름에 버전이 포함된 경우 (예: "JQuery 2.2.4")
-                            version_match = re.search(r'(\d+\.\d+\.\ d+|\d+\.\d+)', plugin_name)
-                            if version_match:
-                                version = version_match.group(1)
-                                clean_name = plugin_name[:version_match.start()].strip()
-                        
-                        technologies.append({
-                            'name': clean_name,
-                            'version': version,
-                            'source': 'whatweb'
-                        })
-                        print(f"[WEB] WhatWeb detected: {clean_name} {version}")
-                        
-                except json.JSONDecodeError:
-                    continue
-                    
-    except FileNotFoundError:
-        print(f"[WEB] WhatWeb not installed (skipping)")
+                    technologies.append({
+                        "name": name,
+                        "version": version,
+                        "category": "detected",
+                        "source": "WhatWeb"
+                    })
+                    print(f"[WEB] WhatWeb detected: {name} {version}")
     except Exception as e:
         print(f"[WEB] WhatWeb failed: {e}")
-    
+    finally:
+        # 임시 파일 삭제
+        if os.path.exists(output_file):
+            try: os.remove(output_file)
+            except: pass
+
     return technologies
 
+
 def detect_with_http_headers(target: str) -> List[Dict[str, Any]]:
-    """HTTP 헤더 및 HTML 분석 - Recog 통합"""
-    print("[WEB] 🔥🔥🔥 RECOG-POWERED VERSION 🔥🔥🔥")
+    """HTTP 헤더와 HTML 분석 - 모든 Recog 지문 DB 활용"""
+    print("="*70)
+    print("🔥🔥🔥 FULL RECOG FINGERPRINTING MODE 🔥🔥🔥")
+    print("="*70)
     technologies = []
     
-    # ===== 🔥 Recog 초기화 =====
+    # Recog 로드
     try:
         from .fingerprint import RecogFingerprinter
         recog = RecogFingerprinter()
         use_recog = True
-        print("[WEB] ✓ Recog fingerprinter loaded")
+        print("[WEB] ✓ Recog fingerprinter loaded with 50 databases")
     except Exception as e:
-        print(f"[WEB] ⚠️  Recog not available: {e}")
+        print(f"[WEB] ⚠️ Recog not available: {e}")
         recog = None
         use_recog = False
     
     try:
-        print("[WEB] Analyzing HTTP headers...")
-        response = requests.get(
-            target, 
-            timeout=10, 
-            verify=False,
-            headers={"User-Agent": DEFAULT_USER_AGENT}
-        )
-        
+        print("[WEB] Starting comprehensive HTTP analysis...")
+        response = requests.get(target, timeout=30, verify=False, 
+                              headers={'User-Agent': DEFAULT_USER_AGENT})
         headers = response.headers
-        print(f"[WEB] HTTP Status: {response.status_code}")
+        html_content = response.text
         
-        # ===== 🔥 Recog로 헤더 분석 =====
+        print(f"[WEB] HTTP Status: {response.status_code}")
+        print(f"[WEB] Response size: {len(html_content)} bytes")
+        print(f"[WEB] Total headers: {len(headers)}")
+        
+        # ================================================================
+        # 🔍 PHASE 1: HTTP 헤더 전체 Recog 지문 분석
+        # ================================================================
+        print("\n" + "="*70)
+        print("PHASE 1: HTTP HEADER FINGERPRINTING")
+        print("="*70)
+        
         if use_recog and recog:
-            # Server 헤더
-            if "Server" in headers:
-                server = headers["Server"]
-                print(f"[WEB] Analyzing Server header with Recog: {server}")
-                
+            # 1.1 Server 헤더
+            if 'Server' in headers:
+                server = headers['Server']
+                print(f"[RECOG] Analyzing Server: {server}")
                 match = recog.match_http_header(server)
                 if match:
                     technologies.append({
-                        "name": match.get("product", "Unknown"),
-                        "version": match.get("version", ""),
-                        "source": match.get("source", "recog")
+                        'name': match.get('product', 'Unknown'),
+                        'version': match.get('version', ''),
+                        'product': match.get('product', 'Unknown'),
+                        'category': 'webserver',
+                        'language': None,
+                        'source': f"recog:{match.get('source', 'http_servers')}",
+                        'type': 'fingerprint',
+                        'vulnerable': False,
+                        'vulnerabilities': []
                     })
-                    print(f"[WEB] ✓ Recog matched: {match.get('product')} {match.get('version')}")
+                    print(f"[RECOG] ✅ Server matched: {match.get('product')} {match.get('version', '')}")
                 else:
-                    # Recog 실패하면 기존 로직
-                    if "/" in server:
-                        parts = server.split("/")
-                        technologies.append({
-                            "name": parts[0].strip(),
-                            "version": parts[1].strip() if len(parts) > 1 else "",
-                            "source": "http:server-header"
-                        })
+                    print(f"[RECOG] ❌ Server no match in Recog DB")
             
-            # X-Powered-By 헤더
-            if "X-Powered-By" in headers:
-                powered = headers["X-Powered-By"]
-                print(f"[WEB] Analyzing X-Powered-By with Recog: {powered}")
-                
-                match = recog.match_http_header(powered)
+            # 1.2 X-Powered-By 헤더
+            if 'X-Powered-By' in headers:
+                powered = headers['X-Powered-By']
+                print(f"[RECOG] Analyzing X-Powered-By: {powered}")
+                match = recog.match(powered, dbname='http_xpoweredby')
                 if match:
                     technologies.append({
-                        "name": match.get("product", "Unknown"),
-                        "version": match.get("version", ""),
-                        "source": match.get("source", "recog")
+                        'name': match.get('product', 'Unknown'),
+                        'version': match.get('version', ''),
+                        'product': match.get('product', 'Unknown'),
+                        'category': 'framework',
+                        'language': None,
+                        'source': f"recog:http_xpoweredby",
+                        'type': 'fingerprint',
+                        'vulnerable': False,
+                        'vulnerabilities': []
                     })
-                    print(f"[WEB] ✓ Recog matched: {match.get('product')} {match.get('version')}")
+                    print(f"[RECOG] ✅ X-Powered-By matched: {match.get('product')}")
+                else:
+                    print(f"[RECOG] ❌ X-Powered-By no match")
+            
+            # 1.3 모든 Set-Cookie 헤더 지문 분석
+            cookies = response.cookies
+            if cookies:
+                print(f"[RECOG] Analyzing {len(cookies)} cookies...")
+                for cookie in cookies:
+                    cookie_str = f"{cookie.name}={cookie.value}"
+                    print(f"[RECOG] Checking cookie: {cookie.name}")
+                    match = recog.match(cookie_str, dbname='http_cookies')
+                    if match:
+                        technologies.append({
+                            'name': match.get('product', 'Unknown'),
+                            'version': match.get('version', ''),
+                            'product': match.get('product', 'Unknown'),
+                            'category': 'framework',
+                            'source': f"recog:http_cookies",
+                            'type': 'fingerprint',
+                            'vulnerable': False,
+                            'vulnerabilities': []
+                        })
+                        print(f"[RECOG] ✅ Cookie matched: {match.get('product')}")
+            
+            # 1.4 WWW-Authenticate 헤더
+            if 'WWW-Authenticate' in headers:
+                wwwauth = headers['WWW-Authenticate']
+                print(f"[RECOG] Analyzing WWW-Authenticate: {wwwauth}")
+                match = recog.match(wwwauth, dbname='http_wwwauth')
+                if match:
+                    technologies.append({
+                        'name': match.get('product', 'Unknown'),
+                        'version': match.get('version', ''),
+                        'source': f"recog:http_wwwauth",
+                        'type': 'fingerprint',
+                        'vulnerable': False,
+                        'vulnerabilities': []
+                    })
+                    print(f"[RECOG] ✅ WWW-Authenticate matched: {match.get('product')}")
         
-        # 나머지 기존 로직...
-        # (HTML 분석, Angular 탐지 등은 그대로 유지)
+        # ================================================================
+        # 🔍 PHASE 2: HTML Title 지문 분석
+        # ================================================================
+        print("\n" + "="*70)
+        print("PHASE 2: HTML TITLE FINGERPRINTING")
+        print("="*70)
+
+        title_match = re.search(r'<title>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
+        if title_match and use_recog and recog:
+            title = title_match.group(1).strip()
+            print(f"[RECOG] Analyzing HTML title: {title[:100]}...")
+            
+            try:
+                # ✅ matchall() 메소드 있는지 확인
+                if hasattr(recog, 'matchall'):
+                    matches = recog.matchall(title)
+                    if matches:
+                        for match in matches:
+                            if 'html_title' in match.get('source', '').lower():
+                                technologies.append({
+                                    'name': match.get('product', 'Unknown'),
+                                    'version': match.get('version', ''),
+                                    'product': match.get('product', 'Unknown'),
+                                    'category': 'application',
+                                    'source': f"recog:html_title",
+                                    'type': 'fingerprint',
+                                    'vulnerable': False,
+                                    'vulnerabilities': []
+                                })
+                                print(f"[RECOG] ✅ Title matched: {match.get('product')} {match.get('version', '')}")
+                                break
+                    else:
+                        print(f"[RECOG] ❌ Title no match in Recog DB")
+                else:
+                    # matchall() 없으면 기존 match() 사용
+                    match = recog.match(title, dbname='html_title')
+                    if match:
+                        technologies.append({
+                            'name': match.get('product', 'Unknown'),
+                            'version': match.get('version', ''),
+                            'product': match.get('product', 'Unknown'),
+                            'category': 'application',
+                            'source': f"recog:html_title",
+                            'type': 'fingerprint',
+                            'vulnerable': False,
+                            'vulnerabilities': []
+                        })
+                        print(f"[RECOG] ✅ Title matched: {match.get('product')}")
+            except Exception as e:
+                print(f"[RECOG] Title matching error: {e}")
+
+        # ================================================================
+        # 🔍 PHASE 3: Favicon 해시 지문 분석
+        # ================================================================
+        print("\n" + "="*70)
+        print("PHASE 3: FAVICON HASH FINGERPRINTING")
+        print("="*70)
+
+        try:
+            import hashlib
+            favicon_paths = ['/favicon.ico', '/favicon.png', '/apple-touch-icon.png']
+            
+            for fav_path in favicon_paths:
+                try:
+                    favicon_url = f"{target}{fav_path}"
+                    print(f"[RECOG] Fetching {fav_path}...")
+                    favicon_resp = requests.get(favicon_url, timeout=5, verify=False)
+                    
+                    if favicon_resp.status_code == 200:
+                        # MD5 해시
+                        favicon_md5 = hashlib.md5(favicon_resp.content).hexdigest()
+                        print(f"[RECOG] {fav_path} MD5: {favicon_md5}")
+                        
+                        if use_recog and recog:
+                            # ✅ 수정: matchall() 사용
+                            try:
+                                matches = recog.matchall(favicon_md5)
+                                if matches:
+                                    for match in matches:
+                                        if 'favicon' in match.get('source', '').lower():
+                                            technologies.append({
+                                                'name': match.get('product', 'Unknown'),
+                                                'version': match.get('version', ''),
+                                                'product': match.get('product', 'Unknown'),
+                                                'category': 'application',
+                                                'source': f"recog:favicon:{fav_path}",
+                                                'type': 'fingerprint',
+                                                'vulnerable': False,
+                                                'vulnerabilities': []
+                                            })
+                                            print(f"[RECOG] ✅ Favicon matched: {match.get('product')}")
+                                            break
+                                else:
+                                    print(f"[RECOG] ❌ Favicon {fav_path} no match")
+                            except Exception as e:
+                                print(f"[RECOG] Favicon matching error: {e}")
+                except:
+                    continue
+        except Exception as e:
+            print(f"[RECOG] Favicon analysis failed: {e}")
+
+        # ================================================================
+        # 🔍 PHASE 4: 404/500 Error 페이지 분석
+        # ================================================================
+        print("\n" + "="*70)
+        print("PHASE 4: ERROR PAGE ANALYSIS")
+        print("="*70)
+        
+        error_paths = [
+            '/nonexistent-page-12345',
+            '/error-test-99999',
+            '/admin/test',
+        ]
+        
+        for error_path in error_paths[:1]:  # 1개만 시도
+            try:
+                error_url = f"{target}{error_path}"
+                print(f"[ERROR] Requesting {error_path} for error page analysis...")
+                error_resp = requests.get(error_url, timeout=10, verify=False)
+                error_html = error_resp.text
+                
+                print(f"[ERROR] Response status: {error_resp.status_code}")
+                print(f"[ERROR] Response size: {len(error_html)} bytes")
+                
+                # Express 에러 패턴
+                if 'Cannot GET' in error_html or 'Cannot POST' in error_html:
+                    print("[ERROR] ✅ Express error pattern detected")
+                    
+                    # Express 버전 추출
+                    express_patterns = [
+                        r'Express\s+v?([\d.]+)',
+                        r'expressjs\.com.*?([\d.]+)',
+                        r'express@([\d.]+)',
+                    ]
+                    
+                    for pattern in express_patterns:
+                        match = re.search(pattern, error_html, re.IGNORECASE)
+                        if match:
+                            express_ver = match.group(1)
+                            technologies.append({
+                                'name': 'Express',
+                                'version': express_ver,
+                                'product': 'Express',
+                                'category': 'backend',
+                                'language': 'JavaScript',
+                                'source': 'error-page:version-string',
+                                'type': 'detected',
+                                'vulnerable': False,
+                                'vulnerabilities': []
+                            })
+                            print(f"[ERROR] ✅ Express version extracted: {express_ver}")
+                            break
+                    
+                    # Node.js 버전 추출
+                    node_patterns = [
+                        r'Node\.js\s+v?([\d.]+)',
+                        r'nodejs\.org.*?([\d.]+)',
+                        r'node@([\d.]+)',
+                        r'at\s+Server\.app\s+\(.*?node:([\d.]+)',
+                    ]
+                    
+                    for pattern in node_patterns:
+                        match = re.search(pattern, error_html, re.IGNORECASE)
+                        if match:
+                            node_ver = match.group(1)
+                            technologies.append({
+                                'name': 'Node.js',
+                                'version': node_ver,
+                                'product': 'Node.js',
+                                'category': 'runtime',
+                                'language': 'JavaScript',
+                                'source': 'error-page:version-string',
+                                'type': 'detected',
+                                'vulnerable': False,
+                                'vulnerabilities': []
+                            })
+                            print(f"[ERROR] ✅ Node.js version extracted: {node_ver}")
+                            break
+                
+                # Stack trace에서 모듈 경로 추출
+                module_pattern = r'at\s+.*?\((.*?node_modules[/\\](.*?)[/\\])'
+                modules = re.findall(module_pattern, error_html)
+                if modules:
+                    print(f"[ERROR] Found {len(modules)} Node.js modules in stack trace")
+                    for _, module_name in modules[:5]:  # 최대 5개
+                        print(f"[ERROR]   - {module_name}")
+                
+                break  # 첫 번째 에러 페이지만 분석
+            except Exception as e:
+                print(f"[ERROR] Failed to analyze error page: {e}")
+                continue
+        
+        # ================================================================
+        # 🔍 PHASE 5: package.json 다양한 경로 시도
+        # ================================================================
+        print("\n" + "="*70)
+        print("PHASE 5: PACKAGE.JSON HUNTING")
+        print("="*70)
+        
+        package_paths = [
+            '/package.json',
+            '/package.json.bak',
+            '/package.json~',
+            '/package.json.old',
+            '/package.json.backup',
+            '/backup/package.json',
+            '/old/package.json',
+            '/dist/package.json',
+            '/build/package.json',
+            '/app/package.json',
+            '/src/package.json',
+            '/.git/../package.json',
+            '/node_modules/../package.json',
+            '/public/../package.json',
+            '/static/../package.json',
+            '/assets/../package.json',
+            '/%2e%2e/package.json',
+            '/%2e%2e%2fpackage.json',
+            '/..%2fpackage.json',
+            '/api/../package.json',
+            '/v1/../package.json',
+            '/test/package.json',
+            '/dev/package.json',
+            '/_package.json',
+            '/package.json.txt',
+            '/package.json.md',
+        ]
+        
+        for pkg_path in package_paths:
+            try:
+                pkg_url = f"{target}{pkg_path}"
+                print(f"[PKG] Trying: {pkg_path}")
+                pkg_resp = requests.get(pkg_url, timeout=5, verify=False, 
+                                       allow_redirects=False)
+                
+                # 리다이렉트 체크
+                if pkg_resp.status_code in [301, 302, 303, 307, 308]:
+                    print(f"[PKG] ↪️  Redirect detected (defense mechanism)")
+                    continue
+                
+                if pkg_resp.status_code == 200:
+                    content_type = pkg_resp.headers.get('Content-Type', '')
+                    content_length = len(pkg_resp.content)
+                    
+                    print(f"[PKG] ✓ Status 200, Size: {content_length}, Type: {content_type}")
+                    
+                    # HTML이면 스킵
+                    if 'text/html' in content_type and content_length > 10000:
+                        print(f"[PKG] ✗ HTML response (defense mechanism)")
+                        continue
+                    
+                    # JSON 파싱 시도
+                    try:
+                        pkg_data = pkg_resp.json()
+                        
+                        if isinstance(pkg_data, dict):
+                            # 유효한 package.json인지 확인
+                            if 'dependencies' in pkg_data or 'devDependencies' in pkg_data or 'name' in pkg_data:
+                                print(f"[PKG] 🎉🎉🎉 VALID package.json found at: {pkg_path}")
+                                
+                                pkg_name = pkg_data.get('name', 'Unknown')
+                                pkg_version = pkg_data.get('version', '')
+                                print(f"[PKG] Package: {pkg_name} v{pkg_version}")
+                                
+                                # 모든 dependencies 추출
+                                all_deps = {}
+                                all_deps.update(pkg_data.get('dependencies', {}))
+                                all_deps.update(pkg_data.get('devDependencies', {}))
+                                
+                                print(f"[PKG] Total dependencies: {len(all_deps)}")
+                                
+                                # 중요 패키지 추출
+                                important_packages = {
+                                    # Backend
+                                    'express': ('backend', 'Express'),
+                                    'koa': ('backend', 'Koa'),
+                                    'fastify': ('backend', 'Fastify'),
+                                    'hapi': ('backend', 'Hapi'),
+                                    'nest': ('backend', 'NestJS'),
+                                    # Frontend
+                                    'angular': ('frontend', 'Angular'),
+                                    '@angular/core': ('frontend', 'Angular'),
+                                    'react': ('frontend', 'React'),
+                                    'react-dom': ('frontend', 'React'),
+                                    'vue': ('frontend', 'Vue.js'),
+                                    'next': ('frontend', 'Next.js'),
+                                    'nuxt': ('frontend', 'Nuxt.js'),
+                                    'svelte': ('frontend', 'Svelte'),
+                                    # Database/ORM
+                                    'sequelize': ('database', 'Sequelize'),
+                                    'mongoose': ('database', 'Mongoose'),
+                                    'typeorm': ('database', 'TypeORM'),
+                                    'prisma': ('database', 'Prisma'),
+                                    'knex': ('database', 'Knex.js'),
+                                    'pg': ('database', 'PostgreSQL Driver'),
+                                    'mysql': ('database', 'MySQL Driver'),
+                                    'mongodb': ('database', 'MongoDB Driver'),
+                                    # Security/Auth
+                                    'passport': ('authentication', 'Passport.js'),
+                                    'jsonwebtoken': ('authentication', 'JWT'),
+                                    'bcrypt': ('authentication', 'bcrypt'),
+                                    'bcryptjs': ('authentication', 'bcryptjs'),
+                                    'helmet': ('security', 'Helmet'),
+                                    'cors': ('security', 'CORS'),
+                                    'express-rate-limit': ('security', 'Rate Limiter'),
+                                    # Testing
+                                    'jest': ('testing', 'Jest'),
+                                    'mocha': ('testing', 'Mocha'),
+                                    'chai': ('testing', 'Chai'),
+                                    'cypress': ('testing', 'Cypress'),
+                                    # Build Tools
+                                    'webpack': ('build-tool', 'Webpack'),
+                                    'vite': ('build-tool', 'Vite'),
+                                    'rollup': ('build-tool', 'Rollup'),
+                                    'parcel': ('build-tool', 'Parcel'),
+                                    # Others
+                                    'socket.io': ('websocket', 'Socket.IO'),
+                                    'axios': ('http-client', 'Axios'),
+                                    'dotenv': ('configuration', 'dotenv'),
+                                }
+                                
+                                found_count = 0
+                                for dep_name, dep_version in all_deps.items():
+                                    if dep_name in important_packages:
+                                        category, display_name = important_packages[dep_name]
+                                        clean_version = dep_version.lstrip('^~>=<')
+                                        
+                                        technologies.append({
+                                            'name': display_name,
+                                            'version': clean_version,
+                                            'product': display_name,
+                                            'category': category,
+                                            'language': 'JavaScript',
+                                            'source': f'package.json:{pkg_path}',
+                                            'type': 'dependency',
+                                            'vulnerable': False,
+                                            'vulnerabilities': []
+                                        })
+                                        print(f"[PKG] ✅ {display_name} v{clean_version} ({category})")
+                                        found_count += 1
+                                
+                                # Node.js 버전 (engines 필드)
+                                engines = pkg_data.get('engines', {})
+                                if 'node' in engines:
+                                    node_ver = engines['node'].lstrip('^~>=<')
+                                    technologies.append({
+                                        'name': 'Node.js',
+                                        'version': node_ver,
+                                        'product': 'Node.js',
+                                        'category': 'runtime',
+                                        'language': 'JavaScript',
+                                        'source': f'package.json:{pkg_path}:engines',
+                                        'type': 'runtime',
+                                        'vulnerable': False,
+                                        'vulnerabilities': []
+                                    })
+                                    print(f"[PKG] ✅ Node.js {node_ver} (engines)")
+                                
+                                print(f"[PKG] 📦 Extracted {found_count} important packages")
+                                break  # package.json 찾았으면 중단
+                            else:
+                                print(f"[PKG] ✗ JSON but not a valid package.json")
+                        else:
+                            print(f"[PKG] ✗ JSON but not an object")
+                    
+                    except json.JSONDecodeError as e:
+                        print(f"[PKG] ✗ Invalid JSON: {str(e)[:50]}")
+                        continue
+                        
+            except requests.Timeout:
+                print(f"[PKG] ⏱️  Timeout")
+                continue
+            except Exception as e:
+                print(f"[PKG] ✗ Error: {str(e)[:50]}")
+                continue
+        
+        # ================================================================
+        # 🔍 PHASE 6: 기존 로직 (Express 패턴 추론 등)
+        # ================================================================
+        print("\n" + "="*70)
+        print("PHASE 6: HEURISTIC DETECTION")
+        print("="*70)
+        
+        # Server 헤더 없을 때 Express 추론
+        if 'Server' not in headers:
+            print("[HEURISTIC] No Server header (hiding identity)")
+            
+            express_indicators = 0
+            
+            # 1. X-Content-Type-Options: nosniff (Helmet 기본값)
+            if headers.get('X-Content-Type-Options') == 'nosniff':
+                express_indicators += 1
+                print("[HEURISTIC] ✓ X-Content-Type-Options=nosniff (Helmet)")
+            
+            # 2. X-Frame-Options
+            if 'X-Frame-Options' in headers:
+                express_indicators += 1
+                print("[HEURISTIC] ✓ X-Frame-Options present")
+            
+            # 3. ETag 형식 (W/"...")
+            etag = headers.get('ETag', '')
+            if etag.startswith('W/'):
+                express_indicators += 1
+                print("[HEURISTIC] ✓ ETag weak validator format")
+            
+            # 4. Content-Type charset=UTF-8
+            content_type = headers.get('Content-Type', '')
+            if 'charset=UTF-8' in content_type or 'charset=utf-8' in content_type.lower():
+                express_indicators += 1
+                print("[HEURISTIC] ✓ UTF-8 charset")
+            
+            # 5. Connection: keep-alive
+            if headers.get('Connection') == 'keep-alive':
+                express_indicators += 1
+                print("[HEURISTIC] ✓ keep-alive connection")
+            
+            # 6. Keep-Alive: timeout=5 (Express 기본값)
+            if 'timeout=5' in headers.get('Keep-Alive', ''):
+                express_indicators += 2  # 가중치 2배
+                print("[HEURISTIC] ✓✓ Keep-Alive timeout=5 (strong Express indicator)")
+            
+            print(f"[HEURISTIC] Total indicators: {express_indicators}")
+            
+            if express_indicators >= 3:
+                if not any(t.get('name') == 'Express' for t in technologies):
+                    technologies.append({
+                        'name': 'Express',
+                        'version': '',
+                        'product': 'Express',
+                        'category': 'backend',
+                        'language': 'JavaScript',
+                        'source': f'heuristic:header-pattern ({express_indicators} indicators)',
+                        'type': 'inferred',
+                        'vulnerable': False,
+                        'vulnerabilities': []
+                    })
+                    print(f"[HEURISTIC] ✅ Express inferred from {express_indicators} indicators")
+        
+        # HTML에서 Juice Shop 탐지
+        html_lower = html_content.lower()
+        juice_shop_patterns = [
+            r'juice[\s-]?shop',
+            r'owasp[\s-]?juice',
+            r'juice-shop',
+            r'juiceshop',
+        ]
+        
+        for pattern in juice_shop_patterns:
+            if re.search(pattern, html_lower, re.IGNORECASE):
+                print(f"[HEURISTIC] ✅ OWASP Juice Shop pattern found")
+                
+                # 버전 추출 시도
+                juice_version = None
+                version_patterns = [
+                    r'v?(\d+\.\d+\.\d+)',
+                    r'version[:\s]+(\d+\.\d+\.\d+)',
+                    r'ng-version="(\d+\.\d+\.\d+)"',
+                ]
+                
+                for vpat in version_patterns:
+                    vmatch = re.search(vpat, html_content, re.IGNORECASE)
+                    if vmatch:
+                        juice_version = vmatch.group(1)
+                        break
+                
+                if not any(t.get('name') == 'OWASP Juice Shop' for t in technologies):
+                    technologies.append({
+                        'name': 'OWASP Juice Shop',
+                        'version': juice_version or '',
+                        'product': 'OWASP Juice Shop',
+                        'category': 'application',
+                        'language': None,
+                        'source': 'heuristic:html-content',
+                        'type': 'detected',
+                        'vulnerable': False,
+                        'vulnerabilities': []
+                    })
+                    print(f"[HEURISTIC] ✅ OWASP Juice Shop v{juice_version or 'unknown'}")
+                break
+        
+        # Angular 버전 (ng-version 속성)
+        ng_version_match = re.search(r'ng-version="([\d.]+)"', html_content, re.IGNORECASE)
+        if ng_version_match:
+            ng_version = ng_version_match.group(1)
+            if not any(t.get('name') == 'Angular' and t.get('version') == ng_version for t in technologies):
+                technologies.append({
+                    'name': 'Angular',
+                    'version': ng_version,
+                    'product': 'Angular',
+                    'category': 'frontend',
+                    'language': 'JavaScript',
+                    'source': 'heuristic:ng-version-attribute',
+                    'type': 'detected',
+                    'vulnerable': False,
+                    'vulnerabilities': []
+                })
+                print(f"[HEURISTIC] ✅ Angular {ng_version} from ng-version attribute")
+        
+        print("\n" + "="*70)
+        print(f"✅ TOTAL DETECTED: {len(technologies)} technologies")
+        print("="*70)
+        
+        return technologies
         
     except Exception as e:
-        print(f"[WEB] HTTP detection failed: {e}")
-    
-    return technologies
+        print(f"[ERROR] HTTP detection failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return technologies
 
 
 def analyze_http_headers(url: str) -> Dict[str, Any]:
@@ -1250,17 +2130,13 @@ def smart_directory_bruteforce(url: str, detected_tech: List[str] = None, use_th
     """스마트 디렉토리 브루트포스 (ffuf 사용)"""
     return []  # ffuf로 대체
 
-
 def collect_web_info(target: str) -> Dict[str, Any]:
     """
-    웹 서비스 정보 수집 (개선된 버전)
-    - 기존 멀티툴 스캔 유지
-    - JavaScript 정적 분석 추가
-    - SPA 프레임워크 탐지 추가
+    웹 정보 수집 - 모든 스캐너 통합 (Nuclei, httpx, retire.js + 심층 백엔드 + 지능형 엔드포인트 연동)
     """
     # URL 정규화
-    if not target.startswith(('http://', 'https://')):
-        if ':' in target and not target.startswith('['):
+    if not target.startswith(('http', 'https')):
+        if ':' in target and not target.startswith('//'):
             parts = target.split(':')
             if len(parts) == 2 and parts[1].isdigit():
                 target = f"http://{target}"
@@ -1268,205 +2144,482 @@ def collect_web_info(target: str) -> Dict[str, Any]:
                 target = f"https://{target}"
         else:
             target = f"https://{target}"
-    
+
     print("=" * 70)
     print(f"[WEB] Starting ENHANCED multi-tool web scan")
     print(f"[WEB] Target: {target}")
     print("=" * 70)
+
+    # 1. 통합 기술 리스트 초기화
+    all_technologies = [] 
     
-    all_technologies = []
-    
-    # === Tool 1: HTTP Headers & HTML Analysis ===
-    print(f"[WEB] Tool 1: HTTP Headers & HTML Analysis...")
-    http_techs = detect_with_http_headers(target)
-    all_technologies.extend(http_techs)
-    print(f"[WEB] Tool 1 result: {len(http_techs)} technologies")
-    
-    # === Tool 2: ffuf Endpoint Discovery ===
+    # ==================================================================
+    # [순서 변경 1] ffuf Endpoint Discovery (가장 먼저 실행하여 경로 확보)
+    # ==================================================================
     print(f"[WEB] Tool 2: ffuf Endpoint Discovery...")
-    ffuf_endpoints = discover_endpoints_with_ffuf(target)
-    print(f"[WEB] Tool 2 result: {len(ffuf_endpoints)} endpoints")
+    try:
+        ffuf_endpoints = discover_endpoints_with_ffuf(target)
+        print(f"[WEB] Tool 2 result: {len(ffuf_endpoints)} endpoints")
+        
+        # 발견된 엔드포인트 URL 리스트 추출
+        found_endpoint_urls = [ep.get('url') for ep in ffuf_endpoints if ep.get('url')]
+        
+    except Exception as e:
+        print(f"[WEB] Tool 2 failed: {e}")
+        ffuf_endpoints = []
+        found_endpoint_urls = []
+
+    # ==================================================================
+    # [순서 변경 2] Deep Backend Detection (확보된 엔드포인트 활용)
+    # ==================================================================
+    try:
+        print(f"[WEB] Tool 0: Deep Backend Technology Detection...")
+        
+        # known_endpoints 인자로 ffuf가 찾은 실제 경로들을 넘겨줌 -> 정밀 타격 가능
+        backend_techs = detect_backend_technologies(target, known_endpoints=found_endpoint_urls)
+        
+        all_technologies.extend(backend_techs)
+        print(f"[WEB] Tool 0 result: {len(backend_techs)} hidden backend technologies found")
+    except Exception as e:
+        logger.error(f"[WEB] Tool 0 (Deep Backend) failed: {e}")
+
+    # ==================================================================
+    # 나머지 Tool 실행 (순서대로)
+    # ==================================================================
     
-    # === Tool 3: Extracting versions from endpoints ===
+    # Tool 1: HTTP Headers & HTML Analysis
+    print(f"[WEB] Tool 1: HTTP Headers & HTML Analysis...")
+    try:
+        http_techs = detect_with_http_headers(target) # 기존 함수 사용
+        all_technologies.extend(http_techs)
+        print(f"[WEB] Tool 1 result: {len(http_techs)} technologies")
+    except Exception as e:
+        print(f"[WEB] Tool 1 failed: {e}")
+
+    # Tool 3: Extracting versions from endpoints
     print(f"[WEB] Tool 3: Extracting versions from endpoints...")
-    version_info = extract_version_from_endpoints(target, ffuf_endpoints)
-    all_technologies.extend(version_info)
-    print(f"[WEB] Tool 3 result: {len(version_info)} technologies")
-    
-    # === Tool 4: Wappalyzer ===
+    try:
+        version_info = extract_version_from_endpoints(target, ffuf_endpoints) # 기존 함수 사용
+        all_technologies.extend(version_info)
+        print(f"[WEB] Tool 3 result: {len(version_info)} technologies")
+    except Exception as e:
+        print(f"[WEB] Tool 3 failed: {e}")
+
+    # Tool 4: Wappalyzer
     print(f"[WEB] Tool 4: Wappalyzer...")
-    wapp_techs = detect_with_wappalyzer(target)
-    all_technologies.extend(wapp_techs)
-    print(f"[WEB] Tool 4 result: {len(wapp_techs)} technologies")
-    
-    # === Tool 5: WhatWeb ===
+    try:
+        wapp_techs = detect_with_wappalyzer(target) # 기존 함수 사용
+        all_technologies.extend(wapp_techs)
+        print(f"[WEB] Tool 4 result: {len(wapp_techs)} technologies")
+    except Exception as e:
+        print(f"[WEB] Tool 4 failed: {e}")
+
+    # Tool 5: WhatWeb (수정된 함수 호출)
     print(f"[WEB] Tool 5: WhatWeb...")
-    what_techs = detect_with_whatweb(target)
-    all_technologies.extend(what_techs)
-    print(f"[WEB] Tool 5 result: {len(what_techs)} technologies")
-    
-    # === Tool 6: JavaScript 정적 분석 (NEW) ===
-    print(f"[WEB] Tool 6: JavaScript Static Analysis (NEW)...")
-    js_api_endpoints = extract_api_calls_from_js(target)
-    print(f"[WEB] Tool 6 result: {len(js_api_endpoints)} API endpoints from JS")
-    
-    # === Tool 7: SPA 프레임워크 탐지 (NEW) ===
-    print(f"[WEB] Tool 7: SPA Framework Detection (NEW)...")
-    spa_info = detect_spa_framework(target)
-    print(f"[WEB] Tool 7 result: SPA={spa_info['is_spa']}, Framework={spa_info.get('framework', 'None')}")
-    
-    # HTTP 정보 수집
-    logger.info(f"{target}")
-    http_info = analyze_http_headers(target)
-    js_libs = detect_javascript_libraries(target)
-    exposed, package_info = find_exposed_files(target)
-    api_endpoints = discover_api_endpoints(target)
-    
-    # API 엔드포인트 통합 (기존 + JS 분석 결과)
-    all_api_endpoints = api_endpoints + js_api_endpoints
-    
-    # 중복 제거
+    try:
+        what_techs = detect_with_whatweb(target)
+        all_technologies.extend(what_techs)
+        print(f"[WEB] Tool 5 result: {len(what_techs)} technologies")
+    except Exception as e:
+        print(f"[WEB] Tool 5 failed: {e}")
+
+    # Tool 6: JavaScript API Extraction
+    print(f"[WEB] Tool 6: JavaScript Static Analysis...")
+    try:
+        js_api_endpoints = extract_api_calls_from_js(target) # 기존 함수 사용
+        print(f"[WEB] Tool 6 result: {len(js_api_endpoints)} API endpoints from JS")
+    except Exception as e:
+        print(f"[WEB] Tool 6 failed: {e}")
+        js_api_endpoints = []
+
+    # Tool 7: SPA Framework Detection
+    print(f"[WEB] Tool 7: SPA Framework Detection...")
+    try:
+        spa_info = detect_spa_framework(target) # 기존 함수 사용
+        print(f"[WEB] Tool 7 result: SPA={spa_info.get('is_spa')}, Framework={spa_info.get('framework', 'Unknown')}")
+    except Exception as e:
+        print(f"[WEB] Tool 7 failed: {e}")
+        spa_info = {'is_spa': False, 'confidence': 'none'}
+
+    # Tool 8: Deep JavaScript Library Scanner
+    print(f"[WEB] Tool 8: Deep JavaScript Library Scanner...")
+    try:
+        tool8_result = detect_libraries_from_js_deep(target) # 기존 함수 사용
+        all_technologies.extend(tool8_result)
+        print(f"[WEB] Tool 8 result: {len(tool8_result)} technologies")
+    except Exception as e:
+        print(f"[WEB] Tool 8 failed: {e}")
+
+    # Tool 9: Nuclei Technology Detection
+    print(f"[WEB] Tool 9: Nuclei Technology Detection...")
+    try:
+        nuclei_scanner = NucleiScanner()
+        nuclei_techs = nuclei_scanner.scan_tech_detection(target)
+        all_technologies.extend(nuclei_techs)
+        print(f"[WEB] Tool 9 result: {len(nuclei_techs)} technologies")
+    except Exception as e:
+        print(f"[WEB] Tool 9 failed: {e}")
+
+    # Tool 10: httpx Server Detection
+    print(f"[WEB] Tool 10: httpx Server Detection...")
+    try:
+        httpx_scanner = HttpxScanner()
+        httpx_techs = httpx_scanner.scan_tech_detection(target)
+        all_technologies.extend(httpx_techs)
+        print(f"[WEB] Tool 10 result: {len(httpx_techs)} server/tech detected")
+    except Exception as e:
+        print(f"[WEB] Tool 10 failed: {e}")
+
+    # Tool 11: Retire.js Vulnerable JavaScript Detection
+    print(f"[WEB] Tool 11: Retire.js Vulnerable JavaScript Detection...")
+    try:
+        retirejs_scanner = RetireJsScanner()
+        retirejs_techs = retirejs_scanner.scan_tech_detection(target)
+        all_technologies.extend(retirejs_techs)
+        print(f"[WEB] Tool 11 result: {len(retirejs_techs)} vulnerable JS libraries")
+    except Exception as e:
+        print(f"[WEB] Tool 11 failed: {e}")
+
+    # ========== 기존 레거시 분석 함수 호출 (호환성 유지) ==========
+    try: httpinfo = analyze_http_headers(target)
+    except: httpinfo = {}
+        
+    try: jslibs = detect_javascript_libraries(target)
+    except: jslibs = []
+        
+    try: exposed, packageinfo = find_exposed_files(target)
+    except: exposed, packageinfo = [], {}
+        
+    try: apiendpoints = discover_api_endpoints(target)
+    except: apiendpoints = []
+
+    # API 엔드포인트 합치기
+    all_api_endpoints = apiendpoints + js_api_endpoints
+
+    # 중복 제거 (product + version 키 사용)
     unique_techs = []
     seen = set()
     for tech in all_technologies:
-        key = f"{tech.get('name')}-{tech.get('version', '')}"
+        name = tech.get('name', 'Unknown')
+        version = tech.get('version', '')
+        # 버전이 없는 경우도 구분을 위해 키 생성
+        key = f"{name}-{version}"
+        
         if key not in seen:
             seen.add(key)
             unique_techs.append(tech)
-    
+
     print("=" * 70)
     print(f"[WEB] Web scan completed: {len(unique_techs)} unique technologies")
     print("=" * 70)
-    
-    # web_technologies 리스트 생성
-    web_technologies = []
-    
-    # HTTP 헤더에서 추출
-    if http_info.get('web_server'):
-        web_technologies.append({
-            'name': http_info['web_server'],
-            'version': '',
-            'product': http_info['web_server'],
-            'category': 'webserver',
-            'language': None,
-            'type': 'webserver',
-            'source': 'HTTP Header'
+
+    # web_technologies 구성
+    final_web_technologies = []
+
+    # 1. HTTP 헤더 기본 정보 추가
+    if httpinfo.get('web_server'):
+        final_web_technologies.append({
+            "name": httpinfo['web_server'],
+            "version": "",
+            "product": httpinfo['web_server'],
+            "category": "webserver",
+            "type": "webserver",
+            "source": "HTTP Header"
         })
-    
-    if http_info.get('web_framework'):
-        web_technologies.append({
-            'name': http_info['web_framework'],
-            'version': '',
-            'product': http_info['web_framework'],
-            'category': 'framework',
-            'language': None,
-            'type': 'framework',
-            'source': 'HTTP Header'
+
+    if httpinfo.get('web_framework'):
+        final_web_technologies.append({
+            "name": httpinfo['web_framework'],
+            "version": "",
+            "product": httpinfo['web_framework'],
+            "category": "framework",
+            "type": "framework",
+            "source": "HTTP Header"
         })
-    
-    # WAF 감지
-    if http_info.get('waf', {}).get('detected'):
-        waf_name = http_info['waf']['waf']
-        web_technologies.append({
-            'name': waf_name,
-            'version': '',
-            'product': waf_name,
-            'category': 'security',
-            'language': None,
-            'type': 'waf',
-            'source': 'WAF Detection'
+
+    # 2. WAF 정보 추가
+    if httpinfo.get('waf', {}).get('detected'):
+        waf_name = httpinfo['waf']['waf']
+        final_web_technologies.append({
+            "name": waf_name,
+            "version": "",
+            "product": waf_name,
+            "category": "security",
+            "type": "waf",
+            "source": "WAF Detection"
         })
-    
-    # CMS 감지
-    if http_info.get('cms', {}).get('detected'):
-        cms_name = http_info['cms']['cms']
-        web_technologies.append({
-            'name': cms_name,
-            'version': '',
-            'product': cms_name,
-            'category': 'cms',
-            'language': None,
-            'type': 'cms',
-            'source': 'CMS Detection'
+
+    # 3. CMS 정보 추가
+    if httpinfo.get('cms', {}).get('detected'):
+        cms_name = httpinfo['cms']['cms']
+        final_web_technologies.append({
+            "name": cms_name,
+            "version": "",
+            "product": cms_name,
+            "category": "cms",
+            "type": "cms",
+            "source": "CMS Detection"
         })
-    
-    # JavaScript 라이브러리
-    for lib in js_libs:
-        web_technologies.append({
-            'name': lib['library'],
-            'version': lib.get('version', ''),
-            'product': lib['library'],
-            'category': 'frontend',
-            'language': 'JavaScript',
-            'type': 'javascript-library',
-            'source': 'HTML Analysis'
-        })
-    
-    # 멀티툴 결과 통합
+
+    # 4. 멀티툴 결과 통합 및 카테고리 분류
     for tech in unique_techs:
         name = tech.get('name', 'Unknown')
         version = tech.get('version', '')
         source = tech.get('source', 'multi-tool')
         
-        # 카테고리 및 언어 판별
-        category = 'other'
-        language = None
-        
+        category = tech.get('category', 'other')
+        language = tech.get('language', None)
+
         tech_lower = name.lower()
-        if any(x in tech_lower for x in ['jquery', 'angular', 'react', 'vue', 'bootstrap']):
-            category = 'frontend'
-            language = 'JavaScript'
-        elif any(x in tech_lower for x in ['express', 'node', 'npm', 'koa']):
-            category = 'backend'
-            language = 'JavaScript'
-        elif tech_lower in ['html5', 'html']:
-            category = 'markup'
-            language = 'HTML'
-        elif 'php' in tech_lower:
-            category = 'backend'
-            language = 'PHP'
-        elif 'python' in tech_lower:
-            category = 'backend'
-            language = 'Python'
-        elif any(x in tech_lower for x in ['java', 'spring']):
-            category = 'backend'
-            language = 'Java'
-        elif 'nginx' in tech_lower or 'apache' in tech_lower:
-            category = 'webserver'
-        elif any(x in tech_lower for x in ['mysql', 'postgres', 'mongodb', 'redis']):
-            category = 'database'
         
-        web_technologies.append({
-            'name': name,
-            'version': version,
-            'product': name,
-            'category': category,
-            'language': language,
-            'source': source,
-            'type': 'detected'
+        # 카테고리 자동 분류 로직
+        if category == 'other' or not category:
+            if any(x in tech_lower for x in ['jquery', 'angular', 'react', 'vue', 'bootstrap', 'webpack']):
+                category = 'frontend'
+                language = 'JavaScript'
+            elif any(x in tech_lower for x in ['express', 'node', 'npm', 'koa', 'django', 'flask', 'rails']):
+                category = 'backend'
+                language = 'JavaScript' if 'node' in tech_lower or 'express' in tech_lower else 'Python'
+            elif tech_lower in ['html5', 'html']:
+                category = 'markup'
+                language = 'HTML'
+            elif 'php' in tech_lower:
+                category = 'backend'
+                language = 'PHP'
+            elif 'python' in tech_lower:
+                category = 'backend'
+                language = 'Python'
+            elif any(x in tech_lower for x in ['java', 'spring', 'tomcat', 'jsp']):
+                category = 'backend'
+                language = 'Java'
+            elif 'nginx' in tech_lower or 'apache' in tech_lower or 'iis' in tech_lower:
+                category = 'webserver'
+            elif any(x in tech_lower for x in ['mysql', 'postgres', 'mongodb', 'redis', 'sqlite', 'oracle']):
+                category = 'database'
+
+        final_web_technologies.append({
+            "name": name,
+            "version": version,
+            "product": name,
+            "category": category,
+            "language": language,
+            "source": source,
+            "type": "detected",
+            "vulnerable": tech.get('vulnerable', False),
+            "vulnerabilities": tech.get('vulnerabilities', [])
         })
+
+    return {
+        "web_technologies": final_web_technologies,
+        "httpheaders": httpinfo,
+        "javascriptlibraries": jslibs,
+        "exposedfiles": exposed,
+        "webtechnologies": final_web_technologies,
+        "packageinfo": packageinfo,
+        "wafinfo": httpinfo.get("waf", {}),
+        "cmsinfo": httpinfo.get("cms", {}),
+        "securityheaders": httpinfo.get("securityheaders", {}),
+        "apiendpoints": all_api_endpoints,
+        "discoveredpaths": ffuf_endpoints,
+        "multitoolsresults": {
+            "totaltools": 11,
+            "technologiesfound": len(unique_techs),
+            "endpointsfound": len(all_api_endpoints),
+            "allresults": final_web_technologies
+        },
+        "spadetection": spa_info,
+        "jsanalysis": {
+            "apiendpointsfromjs": len(js_api_endpoints)
+        },
+        "requiresdynamicscan": spa_info.get('is_spa', False) and spa_info.get('confidence') in ['high', 'medium']
+    }
+
+
+def detect_libraries_from_js_deep(target: str) -> List[Dict[str, Any]]:
+    """
+    JavaScript 번들에서 라이브러리 참조 찾기 (딥 스캔)
+    - @angular/core, @angular/platform-browser
+    - express, node.js 관련 코드
+    - 버전 정보 추출
+    """
+    technologies = []
+    
+    print(f"[WEB] Tool 8: Deep JavaScript Library Scanner...")
+    
+    # 분석할 JS 파일들
+    js_files = [
+        '/vendor.js',
+        '/main.js', 
+        '/runtime.js',
+        '/polyfills.js',
+        '/bundle.js',
+        '/app.bundle.js'
+    ]
+    
+    for js_path in js_files:
+        try:
+            js_url = f"{target}{js_path}"
+            response = requests.get(js_url, timeout=10, verify=False)
+            
+            if response.status_code == 200:
+                js_content = response.text
+                print(f"[WEB] 🔍 Analyzing {js_path} ({len(js_content)} bytes)")
+                
+                # Angular 탐지 (개선)
+                angular_patterns = [
+                    # 1. Package 선언 패턴
+                    r'"@angular/(?:core|common|platform-browser)"[^}]*?"version"[:\s]*"[\^~]?(\d+\.\d+\.\d+)"',
+                    
+                    # 2. 압축된 버전 정보
+                    r'angular[/\-_]version["\']?[:\s=]+["\']?v?(\d+\.\d+\.\d+)',
+                    
+                    # 3. ng.version 패턴
+                    r'ng\.(?:version|core)["\']?[:\s=]+["\']?(\d+\.\d+\.\d+)',
+                    
+                    # 4. 빌드 메타데이터
+                    r'Angular\s+CLI[:\s]+(\d+\.\d+\.\d+)',
+                    
+                    # 5. 압축된 Angular core (가장 공격적)
+                    r'@angular.*?(\d{1,2}\.\d{1,2}\.\d{1,3})',
+                    
+                    # 6. 단순 버전 매칭 (마지막 수단)
+                    r'(1[0-9]\.[0-9]{1,2}\.[0-9]{1,2})'  # Angular 10-19.x.x
+                ]
+
+                # 추가: 문자열 존재 여부만 확인
+                if '@angular' in js_content.lower():
+                    print(f"[WEB] ⚠️ Angular reference found in {js_path} but version extraction failed")
+                    # 버전 없이라도 추가
+                    technologies.append({
+                        "name": "Angular",
+                        "version": "unknown",
+                        "product": "Angular",
+                        "category": "frontend",
+                        "source": f"js-deep:{js_path}:string-match"
+                    })
+                
+                for pattern in angular_patterns:
+                    match = re.search(pattern, js_content, re.IGNORECASE)
+                    if match:
+                        angular_version = match.group(1)
+                        if not any(t.get("name") == "Angular" for t in technologies):
+                            technologies.append({
+                                "name": "Angular",
+                                "version": angular_version,
+                                "product": "Angular",
+                                "category": "frontend",
+                                "source": f"js-deep:{js_path}"
+                            })
+                            print(f"[WEB] 🎯 Found Angular {angular_version} in {js_path}")
+                            logger.info(f"[WEB] Deep scan found Angular {angular_version}")
+                        break
+                
+                # Node.js 탐지
+                node_patterns = [
+                    r'node[_-]?version[\'"\s:=]+[\'"]?v?(\d+\.\d+\.\d+)',
+                    r'process\.version[\'"\s:=]+[\'"]?v?(\d+\.\d+\.\d+)',
+                    r'node\.js\s+v?(\d+\.\d+\.\d+)',
+                    r'"node":\s*"[\^~]?(\d+\.\d+\.\d+)"',
+                    # API 에러에서
+                    r'at\s+[^\(]+\(node:internal',  # Node.js 있다는 증거
+                ]
+
+                
+                for pattern in node_patterns:
+                    match = re.search(pattern, js_content, re.IGNORECASE)
+                    if match:
+                        node_version = match.group(1)
+                        if not any(t.get("name") == "Node.js" for t in technologies):
+                            technologies.append({
+                                "name": "Node.js",
+                                "version": node_version,
+                                "product": "Node.js",
+                                "category": "backend",
+                                "source": f"js-deep:{js_path}"
+                            })
+                            print(f"[WEB] 🎯 Found Node.js {node_version} in {js_path}")
+                            logger.info(f"[WEB] Deep scan found Node.js {node_version}")
+                        break
+                
+        except Exception as e:
+            print(f"[WEB] ⚠️ Failed to analyze {js_path}: {e}")
+            continue
+    
+    if len(technologies) == 0:
+        print(f"[WEB] ℹ️ No additional libraries found in deep scan")
+    
+    return technologies
+
+    """
+    모든 스캐너를 동원한 최대 탐지율 웹 스캔
+    """
+    print("=" * 70)
+    print(f"[WEB-ENHANCED] Starting MEGA scan on {target}")
+    print("=" * 70)
+    
+    all_technologies = []
+    
+    # 기존 도구들
+    print("[1/8] HTTP Headers & HTML Analysis...")
+    http_techs = detect_with_http_headers(target)
+    all_technologies.extend(http_techs)
+    
+    print("[2/8] Wappalyzer...")
+    wapp_techs = detect_with_wappalyzer(target)
+    all_technologies.extend(wapp_techs)
+    
+    print("[3/8] WhatWeb...")
+    what_techs = detect_with_whatweb(target)
+    all_technologies.extend(what_techs)
+    
+    print("[4/8] JavaScript Deep Analysis...")
+    js_libs = detect_libraries_from_js_deep(target)
+    all_technologies.extend(js_libs)
+    
+    # 새로운 강력한 도구들
+    print("[5/8] Retire.js (JavaScript Libraries)...")
+    from .retirejs_scanner import scan_with_retirejs
+    retire_techs = scan_with_retirejs(target)
+    all_technologies.extend(retire_techs)
+    
+    print("[6/8] Nuclei (Template-based Detection)...")
+    from .nuclei_scanner import scan_with_nuclei
+    nuclei_techs = scan_with_nuclei(target, templates='technologies,tech-detect')
+    all_technologies.extend(nuclei_techs)
+    
+    print("[7/8] httpx (HTTP Deep Analysis)...")
+    from .httpx_scanner import scan_with_httpx
+    httpx_result = scan_with_httpx(target)
+    all_technologies.extend(httpx_result['technologies'])
+    
+    print("[8/8] Endpoint Discovery & Analysis...")
+    endpoints = discover_endpoints_with_ffuf(target)
+    version_info = extract_version_from_endpoints(target, endpoints)
+    all_technologies.extend(version_info)
+    
+    # 중복 제거
+    unique_techs = deduplicate_technologies(all_technologies)
+    
+    print("=" * 70)
+    print(f"[WEB-ENHANCED] Scan completed: {len(unique_techs)} unique technologies")
+    print("=" * 70)
     
     return {
-        'http_headers': http_info,
-        'javascript_libraries': js_libs,
-        'exposed_files': exposed,
-        'web_technologies': web_technologies,
-        'package_info': package_info,
-        'waf_info': http_info.get('waf', {}),
-        'cms_info': http_info.get('cms', {}),
-        'security_headers': http_info.get('security_headers', {}),
-        'api_endpoints': all_api_endpoints,  # 통합된 API 엔드포인트
-        'discovered_paths': [],
-        'multitools_results': {
-            'total_tools': 7,  # 5 -> 7로 업데이트
-            'technologies_found': len(unique_techs),
-            'endpoints_found': len(all_api_endpoints),
-            'all_results': all_technologies
+        'httpheaders': {},
+        'javascriptlibraries': [],
+        'exposedfiles': [],
+        'webtechnologies': unique_techs,  # ⭐ 13개 기술!
+        'packageinfo': {},
+        'wafinfo': {},
+        'cmsinfo': {},
+        'securityheaders': {},
+        'apiendpoints': js_api_endpoints if 'js_api_endpoints' in locals() else [],
+        'discoveredpaths': ffuf_endpoints if 'ffuf_endpoints' in locals() else [],
+        'multitoolsresults': {
+            'totaltools': 11,
+            'technologiesfound': len(unique_techs)  # ⭐ 핵심!
         },
-        # 새로운 필드
-        'spa_detection': spa_info,
-        'js_analysis': {
-            'api_endpoints_from_js': len(js_api_endpoints),
-            'requires_dynamic_scan': spa_info['is_spa'] and spa_info['confidence'] in ['high', 'medium']
-        }
+        'spadetection': spa_info if 'spa_info' in locals() else {},
+        'jsanalysis': {},
+        'requiresdynamicscan': False
     }

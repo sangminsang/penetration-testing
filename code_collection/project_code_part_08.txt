@@ -1,0 +1,1060 @@
+================================================================================
+프로젝트 코드 수집 - Part 8
+수집 시간: 2026-01-01 09:21:35
+파일 범위: 36 ~ 38
+================================================================================
+
+📁 이 파트에 포함된 파일:
+ 36. app\core\exploit\advanced_verification.py (10,095 chars)
+ 37. app\core\exploit\attack_chain.py (11,450 chars)
+ 38. app\core\exploit\auth_session.py (14,815 chars)
+
+================================================================================
+
+
+================================================================================
+파일 경로: app\core\exploit\advanced_verification.py
+파일 크기: 10,095 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/advanced_verification.py
+# 다단계 검증 및 컨텍스트 인식 탐지
+
+import time
+import random
+import statistics
+import logging
+from typing import Dict, Any, List, Optional
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+class AdvancedVerification:
+    """
+    다단계 검증 및 컨텍스트 인식 탐지
+    """
+    
+    def __init__(self, min_samples: int = 3, confidence_threshold: float = 0.8):
+        """
+        Args:
+            min_samples: 최소 샘플 수 (통계적 유의성)
+            confidence_threshold: 신뢰도 임계값
+        """
+        self.min_samples = min_samples
+        self.confidence_threshold = confidence_threshold
+    
+    def verify_time_based_sqli(
+        self,
+        url: str,
+        payload: str,
+        expected_delay: float = 5.0,
+        samples: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Time-based SQL Injection 다단계 검증
+        
+        여러 번 반복 측정하여 통계적 유의성 확인
+        """
+        delays = []
+        status_codes = []
+        content_lengths = []
+        
+        for i in range(samples):
+            try:
+                start = time.time()
+                response = requests.get(
+                    url,
+                    params={"id": payload},
+                    timeout=expected_delay + 5,
+                    verify=False
+                )
+                elapsed = time.time() - start
+                
+                delays.append(elapsed)
+                status_codes.append(response.status_code)
+                content_lengths.append(len(response.content))
+                
+                # 랜덤 딜레이 (Rate Limiting 대응)
+                time.sleep(random.uniform(0.5, 1.5))
+                
+            except Exception as e:
+                logger.debug(f"Time-based SQLi 검증 샘플 {i+1} 실패: {e}")
+                continue
+        
+        if len(delays) < self.min_samples:
+            return {
+                "verified": False,
+                "reason": f"충분한 샘플 수집 실패 (수집: {len(delays)}, 필요: {self.min_samples})"
+            }
+        
+        # 통계 분석
+        mean_delay = statistics.mean(delays)
+        median_delay = statistics.median(delays)
+        std_dev = statistics.stdev(delays) if len(delays) > 1 else 0
+        
+        # 신뢰도 계산
+        delay_diff = abs(mean_delay - expected_delay)
+        confidence = 1.0 - min(1.0, delay_diff / expected_delay)
+        
+        # 컨텍스트 분석
+        status_consistent = len(set(status_codes)) == 1
+        content_stable = max(content_lengths) - min(content_lengths) < 100
+        
+        # 최종 판단
+        is_vulnerable = (
+            mean_delay >= expected_delay * 0.9 and  # 90% 이상 지연
+            confidence >= self.confidence_threshold and  # 신뢰도 임계값 이상
+            std_dev < expected_delay * 0.3  # 표준편차가 작음 (일관성)
+        )
+        
+        return {
+            "verified": is_vulnerable,
+            "confidence": confidence,
+            "statistics": {
+                "mean_delay": mean_delay,
+                "median_delay": median_delay,
+                "std_dev": std_dev,
+                "samples": len(delays),
+                "expected_delay": expected_delay
+            },
+            "context": {
+                "status_consistent": status_consistent,
+                "content_stable": content_stable,
+                "status_codes": status_codes,
+                "content_lengths": content_lengths
+            }
+        }
+    
+    def verify_error_based_sqli(
+        self,
+        url: str,
+        payload: str,
+        error_patterns: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Error-based SQL Injection 컨텍스트 인식 탐지
+        
+        HTTP 상태 코드, 응답 시간, 콘텐츠 길이 변화 종합 분석
+        """
+        try:
+            # 정상 요청 (베이스라인)
+            baseline_response = requests.get(
+                url,
+                params={"id": "1"},
+                timeout=10,
+                verify=False
+            )
+            baseline_status = baseline_response.status_code
+            baseline_length = len(baseline_response.content)
+            baseline_time = baseline_response.elapsed.total_seconds()
+            
+            # 페이로드 요청
+            payload_response = requests.get(
+                url,
+                params={"id": payload},
+                timeout=10,
+                verify=False
+            )
+            payload_status = payload_response.status_code
+            payload_length = len(payload_response.content)
+            payload_time = payload_response.elapsed.total_seconds()
+            
+            # 컨텍스트 분석
+            status_changed = baseline_status != payload_status
+            length_changed = abs(baseline_length - payload_length) > 100
+            time_changed = abs(baseline_time - payload_time) > 1.0
+            
+            # 에러 패턴 매칭
+            error_found = False
+            matched_pattern = None
+            response_text = payload_response.text.lower()
+            
+            for pattern in error_patterns:
+                if pattern.lower() in response_text:
+                    error_found = True
+                    matched_pattern = pattern
+                    break
+            
+            # 신뢰도 계산
+            confidence = 0.0
+            if error_found:
+                confidence += 0.5
+            if status_changed:
+                confidence += 0.2
+            if length_changed:
+                confidence += 0.2
+            if time_changed:
+                confidence += 0.1
+            
+            is_vulnerable = confidence >= self.confidence_threshold
+            
+            return {
+                "verified": is_vulnerable,
+                "confidence": confidence,
+                "error_found": error_found,
+                "matched_pattern": matched_pattern,
+                "context": {
+                    "status_changed": status_changed,
+                    "length_changed": length_changed,
+                    "time_changed": time_changed,
+                    "baseline": {
+                        "status": baseline_status,
+                        "length": baseline_length,
+                        "time": baseline_time
+                    },
+                    "payload": {
+                        "status": payload_status,
+                        "length": payload_length,
+                        "time": payload_time
+                    }
+                }
+            }
+            
+        except requests.Timeout as e:
+            logger.warning(f"Timeout during error-based SQLi verification: {url}")
+            return {
+                "verified": False,
+                "error": f"Timeout: {str(e)}"
+            }
+        except requests.ConnectionError as e:
+            logger.error(f"Connection error during error-based SQLi verification: {e}")
+            return {
+                "verified": False,
+                "error": f"Connection error: {str(e)}"
+            }
+        except Exception as e:
+            logger.exception(f"Unexpected error during error-based SQLi verification: {e}")
+            return {
+                "verified": False,
+                "error": str(e)
+            }
+    
+    def verify_boolean_based_sqli(
+        self,
+        url: str,
+        parameter: str,
+        true_payload: str,
+        false_payload: str,
+        samples: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Boolean-based Blind SQL Injection 다단계 검증
+        
+        Args:
+            url: 기본 URL
+            parameter: 파라미터 이름
+            true_payload: True 조건 페이로드
+            false_payload: False 조건 페이로드
+            samples: 샘플 수
+        """
+        from urllib.parse import quote
+        
+        true_responses = []
+        false_responses = []
+        
+        for i in range(samples):
+            try:
+                # True 조건
+                true_response = requests.get(
+                    url,
+                    params={parameter: true_payload},
+                    timeout=10,
+                    verify=False
+                )
+                true_responses.append({
+                    "length": len(true_response.content),
+                    "status": true_response.status_code,
+                    "time": true_response.elapsed.total_seconds()
+                })
+                
+                time.sleep(random.uniform(0.5, 1.0))
+                
+                # False 조건
+                false_response = requests.get(
+                    url,
+                    params={parameter: false_payload},
+                    timeout=10,
+                    verify=False
+                )
+                false_responses.append({
+                    "length": len(false_response.content),
+                    "status": false_response.status_code,
+                    "time": false_response.elapsed.total_seconds()
+                })
+                
+                time.sleep(random.uniform(0.5, 1.0))
+                
+            except Exception as e:
+                logger.debug(f"Boolean-based SQLi 검증 샘플 {i+1} 실패: {e}")
+                continue
+        
+        if len(true_responses) < self.min_samples or len(false_responses) < self.min_samples:
+            return {
+                "verified": False,
+                "reason": "충분한 샘플 수집 실패"
+            }
+        
+        # 통계 분석
+        true_lengths = [r["length"] for r in true_responses]
+        false_lengths = [r["length"] for r in false_responses]
+        
+        true_mean = statistics.mean(true_lengths)
+        false_mean = statistics.mean(false_lengths)
+        
+        length_diff = abs(true_mean - false_mean)
+        length_diff_ratio = length_diff / max(true_mean, false_mean) if max(true_mean, false_mean) > 0 else 0
+        
+        # 신뢰도 계산
+        confidence = min(1.0, length_diff_ratio * 2)  # 차이가 클수록 높은 신뢰도
+        
+        is_vulnerable = (
+            length_diff > 100 and  # 최소 100바이트 차이
+            confidence >= self.confidence_threshold
+        )
+        
+        return {
+            "verified": is_vulnerable,
+            "confidence": confidence,
+            "statistics": {
+                "true_mean_length": true_mean,
+                "false_mean_length": false_mean,
+                "length_difference": length_diff,
+                "samples": len(true_responses)
+            }
+        }
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: app\core\exploit\attack_chain.py
+파일 크기: 11,450 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/attack_chain.py
+# 익스플로잇 체인 구축 및 Attack Path Analysis
+
+import logging
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Vulnerability:
+    """취약점 정보"""
+    cve_id: Optional[str] = None
+    type: str = ""
+    severity: str = "MEDIUM"
+    cvss_score: float = 0.0
+    cvss_vector: str = ""
+    description: str = ""
+    exploit_verified: bool = False
+    confidence: float = 0.0
+    affected_component: str = ""
+    attack_vector: str = ""
+
+
+@dataclass
+class AttackStep:
+    """공격 단계"""
+    step_id: int = 0
+    vulnerability: Vulnerability = field(default_factory=Vulnerability)
+    required_access: str = "None"  # None, Low, Medium, High, Root
+    gained_access: str = "None"
+    description: str = ""
+    prerequisites: List[int] = field(default_factory=list)  # 선행 단계 ID
+
+
+@dataclass
+class AttackPath:
+    """공격 경로"""
+    path_id: str = ""
+    steps: List[AttackStep] = field(default_factory=list)
+    total_cvss: float = 0.0
+    feasibility: float = 0.0
+    impact: str = ""
+
+
+class AttackChainBuilder:
+    """
+    익스플로잇 체인 구축 및 Attack Path Analysis
+    """
+    
+    def __init__(self):
+        self.vulnerabilities: List[Vulnerability] = []
+        self.attack_paths: List[AttackPath] = []
+    
+    def add_vulnerability(self, vuln: Vulnerability):
+        """취약점 추가"""
+        self.vulnerabilities.append(vuln)
+    
+    def generate_cvss_vector(self, vuln: Vulnerability) -> str:
+        """
+        CVSS 3.1 벡터 문자열 생성
+        
+        Args:
+            vuln: 취약점 정보
+        
+        Returns:
+            CVSS 벡터 문자열 (예: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H")
+        """
+        # Attack Vector
+        if vuln.attack_vector:
+            av = vuln.attack_vector[:1]  # N, A, L, P
+        else:
+            av = "N"  # Network (기본값)
+        
+        # Attack Complexity
+        if vuln.detection_method == "time_based" or vuln.detection_method == "boolean_based":
+            ac = "H"  # High (복잡함)
+        else:
+            ac = "L"  # Low
+        
+        # Privileges Required
+        pr = "N"  # None (기본값)
+        
+        # User Interaction
+        ui = "N"  # None (기본값)
+        
+        # Scope
+        s = "U"  # Unchanged (기본값)
+        
+        # Confidentiality Impact
+        if vuln.severity == "CRITICAL":
+            c = "H"
+        elif vuln.severity == "HIGH":
+            c = "H"
+        elif vuln.severity == "MEDIUM":
+            c = "L"
+        else:
+            c = "N"
+        
+        # Integrity Impact
+        i = c  # 동일하게 설정
+        
+        # Availability Impact
+        if "DoS" in vuln.type or "Denial" in vuln.type:
+            a = "H"
+        else:
+            a = "N"
+        
+        vector = f"CVSS:3.1/AV:{av}/AC:{ac}/PR:{pr}/UI:{ui}/S:{s}/C:{c}/I:{i}/A:{a}"
+        return vector
+    
+    def calculate_cvss(self, vuln: Vulnerability) -> float:
+        """
+        CVSS 3.1 스코어 계산 (개선된 버전)
+        
+        실제로는 CVSS 계산 라이브러리 사용 권장
+        """
+        # CVSS 벡터가 없으면 생성
+        if not vuln.cvss_vector:
+            vuln.cvss_vector = self.generate_cvss_vector(vuln)
+        
+        # 실제 CVSS 라이브러리 사용 시도
+        try:
+            from cvss import CVSS3
+            
+            c = CVSS3(vuln.cvss_vector)
+            return c.base_score
+        except ImportError:
+            logger.debug("cvss 라이브러리가 없어 기본 계산 사용")
+        except Exception as e:
+            logger.debug(f"CVSS 라이브러리 사용 실패: {e}")
+        
+        # Fallback: 개선된 계산
+        severity_scores = {
+            "CRITICAL": 9.0,
+            "HIGH": 7.5,
+            "MEDIUM": 5.0,
+            "LOW": 3.5
+        }
+        
+        base_score = severity_scores.get(vuln.severity, 5.0)
+        
+        # Attack Vector 가중치
+        av_weights = {
+            "NETWORK": 0.85,
+            "ADJACENT": 0.62,
+            "LOCAL": 0.55,
+            "PHYSICAL": 0.2
+        }
+        
+        av_weight = av_weights.get(vuln.attack_vector, 0.85)
+        base_score *= av_weight
+        
+        # Exploit 검증 보너스
+        if vuln.exploit_verified:
+            base_score = min(10.0, base_score + 0.5)
+        
+        # Confidence 보정 (0.7 ~ 1.0 범위)
+        confidence_factor = 0.7 + 0.3 * vuln.confidence
+        base_score *= confidence_factor
+        
+        return min(10.0, max(0.0, base_score))
+    
+    def build_attack_paths(self) -> List[AttackPath]:
+        """
+        공격 경로 자동 구축
+        
+        정보 노출 → 권한 상승 → RCE로 이어지는 경로 매핑
+        """
+        paths = []
+        
+        # 1단계: 정보 노출 취약점 찾기
+        info_disclosure = [v for v in self.vulnerabilities if self._is_info_disclosure(v)]
+        
+        # 2단계: 권한 상승 취약점 찾기
+        privilege_escalation = [v for v in self.vulnerabilities if self._is_privilege_escalation(v)]
+        
+        # 3단계: RCE 취약점 찾기
+        rce_vulns = [v for v in self.vulnerabilities if self._is_rce(v)]
+        
+        # 경로 1: 정보 노출 → RCE
+        for info_vuln in info_disclosure:
+            for rce_vuln in rce_vulns:
+                path = AttackPath(
+                    path_id=f"INFO_TO_RCE_{len(paths)}",
+                    steps=[
+                        AttackStep(
+                            step_id=1,
+                            vulnerability=info_vuln,
+                            required_access="None",
+                            gained_access="Low",
+                            description="정보 노출을 통한 초기 접근",
+                            prerequisites=[]
+                        ),
+                        AttackStep(
+                            step_id=2,
+                            vulnerability=rce_vuln,
+                            required_access="Low",
+                            gained_access="Root",
+                            description="RCE를 통한 완전한 시스템 제어",
+                            prerequisites=[1]
+                        )
+                    ],
+                    total_cvss=self.calculate_cvss(info_vuln) + self.calculate_cvss(rce_vuln),
+                    feasibility=self._calculate_feasibility([info_vuln, rce_vuln]),
+                    impact="CRITICAL"
+                )
+                paths.append(path)
+        
+        # 경로 2: 정보 노출 → 권한 상승 → RCE
+        for info_vuln in info_disclosure:
+            for priv_vuln in privilege_escalation:
+                for rce_vuln in rce_vulns:
+                    path = AttackPath(
+                        path_id=f"INFO_TO_PRIV_TO_RCE_{len(paths)}",
+                        steps=[
+                            AttackStep(
+                                step_id=1,
+                                vulnerability=info_vuln,
+                                required_access="None",
+                                gained_access="Low",
+                                description="정보 노출",
+                                prerequisites=[]
+                            ),
+                            AttackStep(
+                                step_id=2,
+                                vulnerability=priv_vuln,
+                                required_access="Low",
+                                gained_access="High",
+                                description="권한 상승",
+                                prerequisites=[1]
+                            ),
+                            AttackStep(
+                                step_id=3,
+                                vulnerability=rce_vuln,
+                                required_access="High",
+                                gained_access="Root",
+                                description="RCE",
+                                prerequisites=[2]
+                            )
+                        ],
+                        total_cvss=(
+                            self.calculate_cvss(info_vuln) +
+                            self.calculate_cvss(priv_vuln) +
+                            self.calculate_cvss(rce_vuln)
+                        ),
+                        feasibility=self._calculate_feasibility([info_vuln, priv_vuln, rce_vuln]),
+                        impact="CRITICAL"
+                    )
+                    paths.append(path)
+        
+        # CVSS 점수로 정렬
+        paths.sort(key=lambda p: p.total_cvss, reverse=True)
+        
+        self.attack_paths = paths
+        return paths
+    
+    def _is_info_disclosure(self, vuln: Vulnerability) -> bool:
+        """정보 노출 취약점 판단"""
+        info_types = [
+            "LFI", "Path Traversal", "XXE", "SSRF",
+            "Information Disclosure", "Directory Listing"
+        ]
+        return any(t in vuln.type for t in info_types)
+    
+    def _is_privilege_escalation(self, vuln: Vulnerability) -> bool:
+        """권한 상승 취약점 판단"""
+        priv_types = [
+            "Broken Authentication", "Session Fixation",
+            "IDOR", "Privilege Escalation"
+        ]
+        return any(t in vuln.type for t in priv_types)
+    
+    def _is_rce(self, vuln: Vulnerability) -> bool:
+        """RCE 취약점 판단"""
+        rce_types = [
+            "Command Injection", "Code Injection", "RCE",
+            "SSTI", "Deserialization", "Log4Shell"
+        ]
+        return any(t in vuln.type for t in rce_types)
+    
+    def _calculate_feasibility(self, vulns: List[Vulnerability]) -> float:
+        """공격 경로의 실행 가능성 계산"""
+        if not vulns:
+            return 0.0
+        
+        # 모든 취약점이 검증되었는지
+        all_verified = all(v.exploit_verified for v in vulns)
+        
+        # 평균 신뢰도
+        avg_confidence = sum(v.confidence for v in vulns) / len(vulns)
+        
+        # 실행 가능성 = (검증 여부 * 0.5) + (신뢰도 * 0.5)
+        feasibility = (1.0 if all_verified else 0.5) * 0.5 + avg_confidence * 0.5
+        
+        return feasibility
+    
+    def get_critical_paths(self, limit: int = 5) -> List[AttackPath]:
+        """가장 위험한 공격 경로 반환"""
+        if not self.attack_paths:
+            self.build_attack_paths()
+        
+        return self.attack_paths[:limit]
+    
+    def generate_post_exploitation_scenarios(self, initial_access: str) -> List[Dict[str, Any]]:
+        """
+        Post-Exploitation 시뮬레이션
+        
+        권한 획득 후 추가 정찰 및 피벗팅 시나리오
+        """
+        scenarios = []
+        
+        if initial_access in ["Low", "Medium", "High", "Root"]:
+            # 시나리오 1: 추가 정보 수집
+            scenarios.append({
+                "scenario": "Information Gathering",
+                "steps": [
+                    "Enumerate system information",
+                    "Check for sensitive files",
+                    "Search for credentials",
+                    "Identify network topology"
+                ],
+                "impact": "MEDIUM"
+            })
+            
+            # 시나리오 2: 권한 상승 시도
+            if initial_access != "Root":
+                scenarios.append({
+                    "scenario": "Privilege Escalation",
+                    "steps": [
+                        "Check for SUID binaries",
+                        "Analyze running processes",
+                        "Check for misconfigured services",
+                        "Search for kernel exploits"
+                    ],
+                    "impact": "HIGH"
+                })
+            
+            # 시나리오 3: 피벗팅
+            scenarios.append({
+                "scenario": "Pivoting",
+                "steps": [
+                    "Map internal network",
+                    "Identify additional targets",
+                    "Establish persistent access",
+                    "Lateral movement"
+                ],
+                "impact": "HIGH"
+            })
+        
+        return scenarios
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: app\core\exploit\auth_session.py
+파일 크기: 14,815 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/auth_session.py
+# 인증 및 세션 관리 테스트
+
+import requests
+import time
+import re
+import logging
+from typing import Dict, Any, List, Optional
+from urllib.parse import urljoin, urlparse
+
+logger = logging.getLogger(__name__)
+
+
+class AuthSessionTester:
+    """
+    인증 및 세션 관리 취약점 테스트
+    """
+    
+    def __init__(self, timeout: int = 10):
+        self.timeout = timeout
+        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    
+    def test_broken_authentication(self, url: str) -> Dict[str, Any]:
+        """
+        Broken Authentication 테스트
+        
+        패스워드 정책, 세션 타임아웃, 다중 로그인 테스트
+        """
+        vulnerabilities = []
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # 1. 약한 패스워드 정책 테스트
+            weak_passwords = [
+                "password", "123456", "admin", "root",
+                "test", "12345", "qwerty", "letmein"
+            ]
+            
+            login_endpoints = ["/login", "/signin", "/auth", "/api/login"]
+            
+            for endpoint in login_endpoints:
+                try:
+                    login_url = urljoin(base_url, endpoint)
+                    
+                    # 약한 패스워드로 로그인 시도
+                    for password in weak_passwords[:5]:
+                        try:
+                            response = requests.post(
+                                login_url,
+                                data={"username": "admin", "password": password},
+                                timeout=self.timeout,
+                                verify=False,
+                                headers={"User-Agent": self.user_agent},
+                                allow_redirects=False
+                            )
+                            
+                            # 로그인 성공 확인
+                            if response.status_code in [200, 302, 301]:
+                                if "dashboard" in response.text.lower() or "welcome" in response.text.lower():
+                                    vulnerabilities.append({
+                                        "type": "Weak Password Policy",
+                                        "endpoint": endpoint,
+                                        "password": password,
+                                        "severity": "HIGH",
+                                        "details": "Weak password accepted"
+                                    })
+                                    break
+                        except requests.Timeout:
+                            logger.warning(f"Timeout during authentication test: {login_url}")
+                            continue
+                        except requests.ConnectionError as e:
+                            logger.error(f"Connection error: {e}")
+                            continue
+                        except Exception as e:
+                            logger.exception(f"Unexpected error during authentication test: {e}")
+                            continue
+                        except requests.Timeout:
+                            logger.warning(f"Timeout during OAuth test: {oauth_url}")
+                            continue
+                        except requests.ConnectionError as e:
+                            logger.error(f"Connection error: {e}")
+                            continue
+                        except Exception as e:
+                            logger.exception(f"Unexpected error during OAuth test: {e}")
+                            continue
+            
+            # 2. 세션 타임아웃 테스트
+            try:
+                # 로그인 후 세션 쿠키 획득
+                session = requests.Session()
+                login_response = session.post(
+                    urljoin(base_url, "/login"),
+                    data={"username": "test", "password": "test"},
+                    timeout=self.timeout,
+                    verify=False
+                )
+                
+                # 세션 쿠키가 있으면 타임아웃 테스트
+                if session.cookies:
+                    # 1시간 후에도 세션이 유효한지 확인 (실제로는 시간이 걸리므로 간단히 체크)
+                    vulnerabilities.append({
+                        "type": "Session Timeout Test",
+                        "severity": "MEDIUM",
+                        "details": "Session timeout configuration needs manual verification",
+                        "note": "Requires time-based testing"
+                    })
+            except:
+                pass
+            
+            # 3. 다중 로그인 테스트
+            try:
+                session1 = requests.Session()
+                session2 = requests.Session()
+                
+                # 두 세션으로 동시 로그인 시도
+                login_url = urljoin(base_url, "/login")
+                session1.post(login_url, data={"username": "user1", "password": "pass1"}, verify=False)
+                session2.post(login_url, data={"username": "user1", "password": "pass1"}, verify=False)
+                
+                # 두 세션이 모두 유효하면 다중 로그인 허용
+                if session1.cookies and session2.cookies:
+                    vulnerabilities.append({
+                        "type": "Multiple Login Sessions",
+                        "severity": "MEDIUM",
+                        "details": "Multiple concurrent sessions allowed for same user"
+                    })
+            except:
+                pass
+                
+        except Exception as e:
+            logger.warning(f"Broken Authentication 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_oauth_oidc(self, url: str) -> Dict[str, Any]:
+        """
+        OAuth/OIDC 취약점 테스트
+        
+        리다이렉션 조작, state 파라미터 검증, 토큰 탈취 시나리오
+        """
+        vulnerabilities = []
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # OAuth 엔드포인트 찾기
+            oauth_endpoints = [
+                "/oauth/authorize",
+                "/oauth2/authorize",
+                "/auth/oauth",
+                "/login/oauth"
+            ]
+            
+            for endpoint in oauth_endpoints:
+                try:
+                    oauth_url = urljoin(base_url, endpoint)
+                    
+                    # 1. Open Redirect 테스트
+                    redirect_urls = [
+                        "http://evil.com",
+                        "https://attacker.com/callback",
+                        "javascript:alert(1)"
+                    ]
+                    
+                    for redirect in redirect_urls:
+                        try:
+                            response = requests.get(
+                                oauth_url,
+                                params={
+                                    "client_id": "test",
+                                    "redirect_uri": redirect,
+                                    "response_type": "code",
+                                    "state": "test"
+                                },
+                                timeout=self.timeout,
+                                verify=False,
+                                allow_redirects=False,
+                                headers={"User-Agent": self.user_agent}
+                            )
+                            
+                            # 리다이렉션 허용 확인
+                            if response.status_code in [301, 302, 307, 308]:
+                                location = response.headers.get("Location", "")
+                                if redirect in location or "evil.com" in location:
+                                    vulnerabilities.append({
+                                        "type": "OAuth Open Redirect",
+                                        "endpoint": endpoint,
+                                        "redirect_uri": redirect,
+                                        "severity": "HIGH",
+                                        "details": "Unvalidated redirect URI"
+                                    })
+                                    break
+                        except requests.Timeout:
+                            logger.warning(f"Timeout during authentication test: {login_url}")
+                            continue
+                        except requests.ConnectionError as e:
+                            logger.error(f"Connection error: {e}")
+                            continue
+                        except Exception as e:
+                            logger.exception(f"Unexpected error during authentication test: {e}")
+                            continue
+                    
+                    # 2. State 파라미터 검증 테스트
+                    try:
+                        # State 파라미터 없이 요청
+                        response_no_state = requests.get(
+                            oauth_url,
+                            params={
+                                "client_id": "test",
+                                "redirect_uri": "http://localhost",
+                                "response_type": "code"
+                            },
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        if response_no_state.status_code == 200:
+                            vulnerabilities.append({
+                                "type": "OAuth Missing State Parameter",
+                                "endpoint": endpoint,
+                                "severity": "MEDIUM",
+                                "details": "State parameter not required or validated"
+                            })
+                    except requests.Timeout:
+                        logger.warning("Timeout during state parameter test")
+                    except requests.ConnectionError as e:
+                        logger.error(f"Connection error: {e}")
+                    except Exception as e:
+                        logger.exception(f"Unexpected error during state parameter test: {e}")
+                    
+                    if vulnerabilities:
+                        break
+                        
+                        except requests.Timeout:
+                            logger.warning(f"Timeout during OAuth test: {oauth_url}")
+                            continue
+                        except requests.ConnectionError as e:
+                            logger.error(f"Connection error: {e}")
+                            continue
+                        except Exception as e:
+                            logger.exception(f"Unexpected error during OAuth test: {e}")
+                            continue
+                    
+        except Exception as e:
+            logger.warning(f"OAuth/OIDC 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_api_keys(self, url: str) -> Dict[str, Any]:
+        """
+        API 키 및 토큰 관리 테스트
+        
+        하드코딩된 시크릿 탐지, 토큰 만료 검증
+        """
+        vulnerabilities = []
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # JavaScript 파일에서 API 키 검색
+            js_files = [
+                "/static/js/app.js",
+                "/js/main.js",
+                "/assets/app.js",
+                "/bundle.js"
+            ]
+            
+            api_key_patterns = [
+                r'api[_-]?key["\']?\s*[:=]\s*["\']([^"\']+)',
+                r'apikey["\']?\s*[:=]\s*["\']([^"\']+)',
+                r'secret["\']?\s*[:=]\s*["\']([^"\']+)',
+                r'token["\']?\s*[:=]\s*["\']([^"\']+)',
+                r'AKIA[0-9A-Z]{16}',  # AWS Access Key
+                r'sk_live_[0-9a-zA-Z]{24}',  # Stripe Secret Key
+                r'AIza[0-9A-Za-z-_]{35}',  # Google API Key
+            ]
+            
+            for js_file in js_files:
+                try:
+                    js_url = urljoin(base_url, js_file)
+                    response = requests.get(
+                        js_url,
+                        timeout=self.timeout,
+                        verify=False,
+                        headers={"User-Agent": self.user_agent}
+                    )
+                    
+                    if response.status_code == 200:
+                        content = response.text
+                        
+                        for pattern in api_key_patterns:
+                            matches = re.findall(pattern, content, re.IGNORECASE)
+                            if matches:
+                                vulnerabilities.append({
+                                    "type": "Hardcoded API Key/Secret",
+                                    "file": js_file,
+                                    "pattern": pattern,
+                                    "severity": "CRITICAL",
+                                    "details": f"Potential API key found in {js_file}"
+                                })
+                                break
+                        except requests.Timeout:
+                            logger.warning(f"Timeout during OAuth test: {oauth_url}")
+                            continue
+                        except requests.ConnectionError as e:
+                            logger.error(f"Connection error: {e}")
+                            continue
+                        except Exception as e:
+                            logger.exception(f"Unexpected error during OAuth test: {e}")
+                            continue
+            
+            # HTML 소스에서도 검색
+            try:
+                response = requests.get(
+                    base_url,
+                    timeout=self.timeout,
+                    verify=False,
+                    headers={"User-Agent": self.user_agent}
+                )
+                
+                html_content = response.text
+                for pattern in api_key_patterns:
+                    matches = re.findall(pattern, html_content, re.IGNORECASE)
+                    if matches:
+                        vulnerabilities.append({
+                            "type": "Hardcoded API Key/Secret in HTML",
+                            "severity": "CRITICAL",
+                            "details": "API key found in page source"
+                        })
+                        break
+            except:
+                pass
+                
+        except Exception as e:
+            logger.warning(f"API Key 테스트 실패: {e}")
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+```
+
+--------------------------------------------------------------------------------

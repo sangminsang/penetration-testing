@@ -47,6 +47,7 @@ PRODUCT_NORMALIZATION_MAP = {
     "mariadb": "mariadb:mariadb",
     "postgresql": "postgresql:postgresql",
     "postgres": "postgresql:postgresql",
+    "sqlite": "sqlite:sqlite",
     "mongodb": "mongodb:mongodb",
     "redis": "redis:redis",
     "elasticsearch": "elastic:elasticsearch",

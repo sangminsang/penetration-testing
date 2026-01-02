@@ -1,0 +1,1181 @@
+================================================================================
+프로젝트 코드 수집 - Part 18
+수집 시간: 2026-01-01 09:21:35
+파일 범위: 79 ~ 90
+================================================================================
+
+📁 이 파트에 포함된 파일:
+ 79. recog\update_cpes.py (15,744 chars)
+ 80. recog\.vscode\extensions.json (62 chars)
+ 81. recog\.vscode\settings.json (122 chars)
+ 82. recog\.vscode\tasks.json (2,308 chars)
+ 83. version_12.31.fin1\collect_project_code.py (12,441 chars)
+ 84. version_12.31.fin1\output.cve-bin-tool.2025-12-24.09-33-07.json (2 chars)
+ 85. version_12.31.fin1\run.py (141 chars)
+ 86. version_12.31.fin1\test_zap_win.py (1,434 chars)
+ 87. version_12.31.fin1\zap_full_scan_20251230_104526.json (474 chars)
+ 88. version_12.31.fin1\zap_full_scan_20251230_104743.json (512 chars)
+ 89. version_12.31.fin1\zap_full_scan_20251230_104918.json (586 chars)
+ 90. version_12.31.fin1\zap_full_scan_20251230_105112.json (586 chars)
+
+================================================================================
+
+
+================================================================================
+파일 경로: recog\update_cpes.py
+파일 크기: 15,744 characters
+확장자: .py (python)
+================================================================================
+
+```python
+#!/usr/bin/env python
+
+import logging
+import re
+import sys
+
+import yaml
+from lxml import etree
+
+BASE_LOG_FORMAT = '%(levelname)s: %(message)s'
+
+# CPE w/o 2.3 component: cpe:/a:nginx:nginx:0.1.0"
+REGEX_CPE = re.compile('^cpe:/([aho]):([^:]+):([^:]+)')
+# CPE w/  2.3 component: cpe:2.3:a:f5:nginx:0.1.0:*:*:*:*:*:*:*
+REGEX_CPE_23 = re.compile('^cpe:2.3:([aho]):([^:]+):([^:]+)')
+
+XML_PATH_DEPRECATED_BY = "./{http://scap.nist.gov/schema/cpe-extension/2.3}cpe23-item/{http://scap.nist.gov/schema/cpe-extension/2.3}deprecation/{http://scap.nist.gov/schema/cpe-extension/2.3}deprecated-by"
+
+# Percent-encoded character decode dict
+PERCENT_DECODE = {
+    '%21': '!',
+    '%22': '\"',
+    '%23': '#',
+    '%24': '$',
+    '%25': '%',
+    '%26': '&',
+    '%27': '\'',
+    '%28': '(',
+    '%29': ')',
+    '%2a': '*',
+    '%2b': '+',
+    '%2c': ',',
+    '%2f': '/',
+    '%3a': ':',
+    '%3b': ';',
+    '%3c': '<',
+    '%3d': '=',
+    '%3e': '>',
+    '%3f': '?',
+    '%40': '@',
+    '%5b': '[',
+    '%5c': '\\',
+    '%5d': ']',
+    '%5e': '^',
+    '%60': '`',
+    '%7b': '{',
+    '%7c': '|',
+    '%7d': '}',
+    '%7e': '~'
+}
+
+# Percent-encode character dict created from the decode dict
+PERCENT_ENCODE = dict([(v, k) for k, v in PERCENT_DECODE.items()])
+
+# Percent decode and encode regex patterns created by joining translation dictionary keys with regex OR
+PERCENT_DECODE_PATTERN = re.compile('|'.join(PERCENT_DECODE))
+PERCENT_ENCODE_PATTERN = re.compile('|'.join(list(map(re.escape, PERCENT_DECODE.values()))))
+
+# Regex pattern used to check for interpolation markers
+INTERPOLATION_PATTERN = re.compile(r'.*\{[^\s]+\}.*')
+
+
+def repl_dict(pattern, d, s):
+    """Performs regex replacement in string s by matching the pattern created from the translation
+    dictionary d
+    Args:
+        pattern (re.Pattern): regex to match the key values in the translation dictionary d
+        d (dict): translation dictionary where the key is the value to match and the value the replacement
+        s (str): input string to process for replacements
+
+    Returns:
+        str, input string processed for replacements
+    """
+    # use lambda as repl function to lookup replacement value based on match
+    return pattern.sub(lambda m: d[m.group()], s)
+
+
+def parse_r7_remapping(file):
+    with open(file) as remap_file:
+        return yaml.safe_load(remap_file)["mappings"]
+
+
+def update_vp_map(target_map, cpe_type, vendor, product):
+    """Add an entry to the dict tracking valid combinations
+    """
+
+    if cpe_type not in target_map:
+        target_map[cpe_type] = {}
+
+    if vendor not in target_map[cpe_type]:
+        target_map[cpe_type][vendor] = set()
+
+    target_map[cpe_type][vendor].add(product)
+
+
+def update_deprecated_map(target_map, dep_string, entry):
+    """Add an entry to the dict tracking deprecations
+
+    target_map example:
+
+    {
+      "a:100plus:101eip":
+        {
+          "deprecated_date": "2021-06-10T15:28:05.490Z",
+          "deprecated_by": "a:hundredplus:101eip"
+        }
+    }
+
+    Args:
+        target_map (dict): dict containing deprecations
+        dep_string (str): key to add in the format of 'type:vendor:product'
+        entry (lxml.etree._Element): XML element to pull additional data from
+
+    Returns:
+        None, target_map modified in place
+    """
+
+    deprecated_date = entry.get("deprecation_date", "")
+
+    # Find the CPE that deprecated this entry
+    raw_dep_by = entry.find(XML_PATH_DEPRECATED_BY).get('name')
+
+    # Extract the type, vendor, product
+    dep_by_match = REGEX_CPE_23.match(raw_dep_by)
+    if not dep_by_match:
+        logging.error("CPE %s is deprecated but we can't build the deprecation mapping entry for some reason.", dep_string)
+        return
+
+    dep_type, dep_vendor, dep_product = dep_by_match.group(1, 2, 3)
+    deprecated_by = "{}:{}:{}".format(dep_type, dep_vendor, dep_product)
+
+    if dep_string not in target_map:
+        target_map[dep_string] = {}
+
+    if not target_map[dep_string].get('deprecated_date'):
+        target_map[dep_string]['deprecated_date'] = deprecated_date
+
+    if not target_map[dep_string].get('deprecated_by'):
+        target_map[dep_string]['deprecated_by'] = deprecated_by
+
+
+def parse_cpe_vp_map(file):
+    deprecated_map = {}
+    vp_map = {} # cpe_type -> vendor -> products
+
+    parser = etree.XMLParser(remove_comments=False)
+    doc = etree.parse(file, parser)
+    namespaces = {
+        'ns':     'http://cpe.mitre.org/dictionary/2.0',
+        'meta':   'http://scap.nist.gov/schema/cpe-dictionary-metadata/0.2'
+    }
+    for entry in doc.xpath("//ns:cpe-list/ns:cpe-item", namespaces=namespaces):
+        cpe_name = entry.get("name")
+        if not cpe_name:
+            continue
+
+        cpe_match = REGEX_CPE.match(cpe_name)
+        if cpe_match:
+            cpe_type, vendor, product = cpe_match.group(1, 2, 3)
+            # If the entry is deprecated then don't add it to our list of valid
+            # CPEs, but instead add it to a list for reference later.
+            if entry.get("deprecated"):
+                # This will be the key under which we store the deprecation data
+                deprecated_string = "{}:{}:{}".format(cpe_type, vendor, product)
+
+                update_deprecated_map(deprecated_map, deprecated_string, entry)
+                continue
+
+            update_vp_map(vp_map, cpe_type, vendor, product)
+
+        else:
+            logging.error("Unexpected CPE %s", cpe_name)
+
+    return vp_map, deprecated_map
+
+
+def lookup_cpe(vendor, product, cpe_type, cpe_table, remap, deprecated_map):
+    """Identify the correct vendor and product values for a CPE
+
+    This function attempts to determine the correct CPE using vendor and product
+    values supplied by the caller as well as a remapping dictionary for mapping
+    these values to more correct values used by NIST.
+
+    For example, the remapping might tell us that a value of 'alpine' for the
+    vendor string should be 'alpinelinux' instead, or for product 'solaris'
+    should be 'sunos'.
+
+    This function should only emit values seen in the official NIST CPE list
+    which is provided to it in cpe_table.
+
+    Lookup priority:
+    1. Original vendor / product
+    2. Original vendor / remap product
+    3. Remap vendor / original product
+    4. Remap vendor / remap product
+
+    Args:
+        vendor (str):  vendor name
+        product (str): product name
+        cpe_type (str): CPE type - o, a, h, etc.
+        cpe_table (dict): dict containing the official NIST CPE data
+        remap (dict): dict containing the remapping values
+        deprecated_cves (set): set of all deprecated CPEs in the format
+            'type:vendor:product'
+    Returns:
+        success, vendor, product
+    """
+
+    if (
+        vendor in cpe_table[cpe_type]
+        and product in cpe_table[cpe_type][vendor]
+    ):
+        # Hot path, success with original values
+        logging.debug(f"lookup_cpe: Hot path, success with original values; vendor = {vendor}, product = {product}")
+        return True, vendor, product
+
+    # Everything else depends on a remap of some sort.
+    # get the remappings for this one vendor string.
+    vendor_remap = None
+
+    remap_type = remap.get(cpe_type, None)
+    if remap_type:
+        vendor_remap = remap_type.get(vendor, None)
+
+    if vendor_remap:
+        # If we have product remappings, work that angle next
+        possible_product = None
+        if (
+            vendor_remap.get('products', None)
+            and product in vendor_remap['products']
+        ):
+            possible_product = vendor_remap['products'][product]
+
+        if (vendor in cpe_table[cpe_type]
+            and possible_product
+            and possible_product in cpe_table[cpe_type][vendor]):
+            # Found original vendor, remap product
+            logging.debug(f"lookup_cpe: Found original vendor, remap product; vendor = {vendor}, possible_product = {possible_product}")
+            return True, vendor, possible_product
+
+        # Start working the process to find a match with a remapped vendor name
+        if vendor_remap.get('vendor', None):
+            new_vendor = vendor_remap['vendor']
+
+            if new_vendor in cpe_table[cpe_type]:
+
+                if product in cpe_table[cpe_type][new_vendor]:
+                    # Found remap vendor, original product
+                    logging.debug(f"lookup_cpe: Found remap vendor, original product; new_vendor = {new_vendor}, product = {product}")
+                    return True, new_vendor, product
+
+                if possible_product and possible_product in cpe_table[cpe_type][new_vendor]:
+                    # Found remap vendor, remap product
+                    logging.debug(f"lookup_cpe: Found remap vendor, remap product; new_vendor = {new_vendor}, possible_product = {possible_product}")
+                    return True, new_vendor, possible_product
+
+    deprecated_string = "{}:{}:{}".format(cpe_type, vendor, product)
+    if deprecated_map.get(deprecated_string, False):
+        dep_by = deprecated_map[deprecated_string].get("deprecated_by", "")
+        dep_date = deprecated_map[deprecated_string].get("deprecated_date", "")
+        logging.error("Product %s from vendor %s invalid for CPE %s and no mapping.  This combination is DEPRECATED by %s at %s",
+                    product, vendor, cpe_type, dep_by, dep_date)
+    else:
+        logging.error("Product %s from vendor %s invalid for CPE %s and no mapping.",
+                    product, vendor, cpe_type)
+
+    return False, None, None
+
+
+def update_cpes(xml_file, cpe_vp_map, r7_vp_map, deprecated_cves):
+    parser = etree.XMLParser(remove_comments=False, remove_blank_text=True)
+    doc = etree.parse(xml_file, parser)
+
+    for fingerprint in doc.xpath('//fingerprint'):
+
+        # collect all the params, grouping by os and service params that could be used to compute a CPE
+        params = {}
+        for param in fingerprint.xpath('./param'):
+            name = param.attrib['name']
+            # remove any existing CPE params
+            if re.match(r'^.*\.cpe\d{0,2}$', name):
+                param.getparent().remove(param)
+                continue
+
+            match = re.search(r'^(?P<fp_type>hw|os|service(?:\.component)?)\.', name)
+            if match:
+                fp_type = match.group('fp_type')
+                if not fp_type in params:
+                    params[fp_type] = {}
+                if name in params[fp_type]:
+                    raise ValueError('Duplicated fingerprint named {} in fingerprint {} in file {}'.format(name, fingerprint.attrib['pattern'], xml_file))
+                params[fp_type][name] = param
+
+        # for each of the applicable os/service param groups, build a CPE
+        for fp_type in params:
+            if fp_type == 'os':
+                cpe_type = 'o'
+            elif fp_type.startswith('service'):
+                cpe_type = 'a'
+            elif fp_type == 'hw':
+                cpe_type = 'h'
+            else:
+                raise ValueError('Unhandled param type {}'.format(fp_type))
+
+            # extract the vendor/product/version values from each os/service group,
+            # using the static value ('Apache', for example) when pos is 0, and
+            # otherwise use a value that contains interpolation markers such that
+            # products/projects that use recog content can insert the value
+            # extracted from the banner/other data via regex capturing groups
+            fp_data = {
+                'vendor': None,
+                'product': None,
+                'version': '-',
+            }
+            for fp_datum in fp_data:
+                fp_datum_param_name = "{}.{}".format(fp_type, fp_datum)
+                if fp_datum_param_name in params[fp_type]:
+                    fp_datum_e = params[fp_type][fp_datum_param_name]
+                    if fp_datum_e.attrib['pos'] == '0':
+                        fp_data[fp_datum] = fp_datum_e.attrib['value']
+                    else:
+                        fp_data[fp_datum] = "{{{}}}".format(fp_datum_e.attrib['name'])
+
+            vendor = fp_data['vendor']
+            product = fp_data['product']
+            version = fp_data['version']
+
+            # build a reasonable looking CPE value from the vendor/product/version,
+            # lowercasing, replacing whitespace with _, and more
+            if vendor and product:
+                if not cpe_type in cpe_vp_map:
+                    logging.error("Didn't find CPE type '%s' for '%s' '%s'", cpe_type, vendor, product)
+                    continue
+
+                if 'unknown' in [vendor, product]:
+                    continue
+
+                if INTERPOLATION_PATTERN.match(vendor) or INTERPOLATION_PATTERN.match(product):
+                    continue
+
+                vendor = vendor.lower().replace(' ', '_').replace(',', '')
+                product = product.lower().replace(' ', '_').replace(',', '')
+
+                tmp_product = product
+                product = repl_dict(PERCENT_ENCODE_PATTERN, PERCENT_ENCODE, product)
+                if tmp_product != product:
+                    logging.debug(f"update_cpes: percent-encoded product {tmp_product} => {product}")
+
+                success, vendor, product = lookup_cpe(vendor, product, cpe_type, cpe_vp_map, r7_vp_map, deprecated_cves)
+                if not success:
+                    continue
+
+                # Sanity check the value to ensure that no invalid values will
+                # slip in due to logic or mapping bugs.
+                # If it's not in the official NIST list then log it and kick it out
+                if product not in cpe_vp_map[cpe_type][vendor]:
+                    logging.error("Invalid CPE type %s created for vendor %s and product %s. This may be due to an invalid mapping.", cpe_type, vendor, product)
+                    continue
+
+                # Create CPE string in URI Binding format value where variables are percent-encoded.
+                # Note, this is only a partially complete encoding.
+                cpe_value = 'cpe:/{}:{}:{}'.format(cpe_type, vendor, product)
+
+                if version:
+                    cpe_value += ":{}".format(version)
+
+                cpe_param = etree.Element('param')
+                cpe_param.attrib['pos'] = '0'
+                cpe_param.attrib['name'] = '{}.cpe23'.format(fp_type)
+                cpe_param.attrib['value'] = cpe_value
+
+                for param_name in params[fp_type]:
+                    param = params[fp_type][param_name]
+                    parent = param.getparent()
+                    index = parent.index(param) + 1
+                    parent.insert(index, cpe_param)
+
+    root = doc.getroot()
+
+    with open(xml_file, 'wb') as xml_out:
+        xml_out.write(etree.tostring(root, pretty_print=True, xml_declaration=True, encoding=doc.docinfo.encoding))
+
+
+def main():
+    if len(sys.argv) != 4:
+        logging.critical("Expecting exactly 3 arguments; recog XML file, CPE 2.3 XML dictionary, JSON remapping, got %s", (len(sys.argv) - 1))
+        sys.exit(1)
+
+    cpe_vp_map, deprecated_map = parse_cpe_vp_map(sys.argv[2])
+    if not cpe_vp_map:
+        logging.critical("No CPE vendor => product mappings read from CPE 2.3 XML dictionary %s", sys.argv[2])
+        sys.exit(1)
+
+    r7_vp_map = parse_r7_remapping(sys.argv[3])
+    if not r7_vp_map:
+        logging.warning("No Rapid7 vendor/product => CPE mapping read from %s", sys.argv[3])
+
+    # update format string for the logging handler to include the recog XML filename
+    logging.basicConfig(force=True, format=f"{sys.argv[1]}: {BASE_LOG_FORMAT}")
+
+    update_cpes(sys.argv[1], cpe_vp_map, r7_vp_map, deprecated_map)
+
+
+if __name__ == '__main__':
+    logging.basicConfig(format=BASE_LOG_FORMAT)
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: recog\.vscode\extensions.json
+파일 크기: 62 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+    "recommendations": [
+        "redhat.vscode-xml"
+    ]
+}
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: recog\.vscode\settings.json
+파일 크기: 122 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+  "xml.fileAssociations": [
+    {
+        "pattern": "xml/*.xml",
+        "systemId": "xml/fingerprints.xsd"
+    }
+ ]
+}
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: recog\.vscode\tasks.json
+파일 크기: 2,308 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Recog Verify - Background Monitor",
+            "command": ".vscode/bin/monitor-recog-fingerprints.sh",
+            "args": [
+                "--schema-location",
+                "xml/fingerprints.xsd",
+                "${workspaceFolder}/xml"
+            ],
+            "windows": {
+                "command": ""
+            },
+            "type": "process",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "recog",
+                "fileLocation": [
+                    "absolute"
+                ],
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):\\s+(WARN|FAIL):\\s+(.*)$",
+                    "file": 1,
+                    "severity": 3,
+                    "message": 4,
+                    "location": 2
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^Changes detected",
+                    "endsPattern": "^Waiting for changes"
+                },
+            },
+            "presentation": {
+                "reveal": "always",
+                "revealProblems": "onProblem"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "Recog Verify",
+            "command": "bin/recog_verify",
+            "args": [
+                "--schema-location",
+                "xml/fingerprints.xsd",
+                "${workspaceFolder}/xml/*.xml"
+            ],
+            "windows": {
+                "command": ""
+            },
+            "type": "process",
+            "problemMatcher": {
+                "owner": "recog",
+                "fileLocation": [
+                    "absolute"
+                ],
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):\\s+(WARN|FAIL):\\s+(.*)$",
+                    "file": 1,
+                    "severity": 3,
+                    "message": 4,
+                    "location": 2
+                }
+            },
+            "presentation": {
+                "reveal": "always",
+                "revealProblems": "onProblem"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\collect_project_code.py
+파일 크기: 12,441 characters
+확장자: .py (python)
+================================================================================
+
+```python
+import os
+import json
+from pathlib import Path
+from datetime import datetime
+
+class ProjectCodeCollector:
+    def __init__(self, project_root, output_dir="code_collection", max_chars_per_file=50000):
+        """
+        프로젝트 코드를 수집하고 분할하여 저장하는 클래스
+        
+        Args:
+            project_root: 프로젝트 루트 디렉터리 경로
+            output_dir: 출력 디렉터리 이름
+            max_chars_per_file: 파일당 최대 문자 수 (기본 5만자 - 더 잘게 나누기)
+        """
+        self.project_root = Path(project_root)
+        self.output_dir = Path(output_dir)
+        self.max_chars_per_file = max_chars_per_file
+        
+        # 확장자 → 언어 매핑
+        self.extension_to_lang = {
+            '.py': 'python',
+            '.js': 'javascript',
+            '.ts': 'typescript',
+            '.jsx': 'jsx',
+            '.tsx': 'tsx',
+            '.html': 'html',
+            '.htm': 'html',
+            '.css': 'css',
+            '.scss': 'scss',
+            '.sass': 'sass',
+            '.less': 'less',
+            '.json': 'json',
+            '.jsonc': 'json',
+            '.yml': 'yaml',
+            '.yaml': 'yaml',
+            '.sql': 'sql',
+            '.sh': 'bash',
+            '.bash': 'bash',
+            '.md': 'markdown',
+            '.mdx': 'markdown',
+            '.txt': '',
+            '.xml': 'xml',
+            '.java': 'java',
+            '.cpp': 'cpp',
+            '.c': 'c',
+            '.go': 'go',
+            '.rs': 'rust',
+            '.rb': 'ruby',
+            '.php': 'php',
+            '.swift': 'swift',
+            '.kt': 'kotlin',
+            '.cs': 'csharp',
+        }
+        
+        # 수집할 파일 확장자 - 핵심 코드만!
+        self.include_extensions = {
+            '.py', '.js', '.html', '.css',  # 웹 개발 핵심
+            '.json', '.yml', '.yaml',        # 설정 파일
+        }
+
+        
+        # 제외할 디렉터리
+        self.exclude_dirs = {
+            '__pycache__', 'node_modules', '.git',
+            'venv', 'env', '.venv', 'dist', 'build',
+            '.next', '__MACOSX', '.cache', '.pytest_cache'
+        }
+        
+        # 제외할 파일
+        self.exclude_files = {
+            '.pyc', '.db', '.zip', '.exe', '.bin'
+        }
+
+    def should_include_file(self, file_path):
+        """파일을 포함할지 결정"""
+        # 확장자 확인
+        if file_path.suffix not in self.include_extensions:
+            return False
+        
+        # 제외 파일 확인
+        if any(file_path.name.endswith(ext) for ext in self.exclude_files):
+            return False
+        
+        # 경로에 제외 디렉터리 포함 여부 확인
+        if any(excluded in file_path.parts for excluded in self.exclude_dirs):
+            return False
+        
+        return True
+
+    def collect_files(self):
+        """프로젝트의 모든 파일 수집"""
+        files_data = []
+        for file_path in self.project_root.rglob('*'):
+            if file_path.is_file() and self.should_include_file(file_path):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    relative_path = file_path.relative_to(self.project_root)
+                    files_data.append({
+                        'path': str(relative_path),
+                        'content': content,
+                        'size': len(content),
+                        'extension': file_path.suffix
+                    })
+                    print(f"✓ 수집: {relative_path} ({len(content):,} chars)")
+                except Exception as e:
+                    print(f"✗ 오류: {file_path} - {str(e)}")
+        
+        return files_data
+
+    def create_output_content(self, files_data, start_idx, end_idx, part_num):
+        """출력 파일 내용 생성 - 코드 블록 포맷 적용"""
+        content_parts = []
+        
+        # 헤더
+        content_parts.append("=" * 80)
+        content_parts.append(f"프로젝트 코드 수집 - Part {part_num}")
+        content_parts.append(f"수집 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        content_parts.append(f"파일 범위: {start_idx + 1} ~ {end_idx}")
+        content_parts.append("=" * 80)
+        content_parts.append("")
+        
+        # 파일 목록
+        content_parts.append("📁 이 파트에 포함된 파일:")
+        for i in range(start_idx, end_idx):
+            file_info = files_data[i]
+            content_parts.append(f" {i+1}. {file_info['path']} ({file_info['size']:,} chars)")
+        content_parts.append("")
+        content_parts.append("=" * 80)
+        content_parts.append("")
+        
+        # 각 파일의 내용 - 코드 블록으로 감싸기
+        for i in range(start_idx, end_idx):
+            file_info = files_data[i]
+            ext = file_info['extension']
+            lang = self.extension_to_lang.get(ext, '')
+            
+            content_parts.append("")
+            content_parts.append("=" * 80)
+            content_parts.append(f"파일 경로: {file_info['path']}")
+            content_parts.append(f"파일 크기: {file_info['size']:,} characters")
+            content_parts.append(f"확장자: {ext} ({lang if lang else '일반 텍스트'})")
+            content_parts.append("=" * 80)
+            content_parts.append("")
+            
+            # 코드 블록 시작 - 언어 태그 포함
+            if lang:
+                content_parts.append(f"```{lang}")
+            else:
+                content_parts.append("```")
+            
+            # 코드 내용 (끝의 개행 제거)
+            content_parts.append(file_info['content'].rstrip("\n"))
+            
+            # 코드 블록 끝
+            content_parts.append("```")
+            content_parts.append("")
+            content_parts.append("-" * 80)
+            content_parts.append("")
+        
+        return "\n".join(content_parts)
+
+    def split_and_save(self, files_data):
+        """파일 데이터를 분할하여 저장"""
+        self.output_dir.mkdir(exist_ok=True)
+        
+        current_size = 0
+        current_files = []
+        part_num = 1
+        start_idx = 0
+        
+        for i, file_info in enumerate(files_data):
+            # 현재 파일을 추가했을 때 크기 초과 여부 확인
+            if current_size + file_info['size'] > self.max_chars_per_file and current_files:
+                # 현재까지 모은 파일들을 저장
+                self._save_part(files_data, start_idx, i, part_num)
+                
+                # 초기화
+                part_num += 1
+                start_idx = i
+                current_files = []
+                current_size = 0
+            
+            current_files.append(i)
+            current_size += file_info['size']
+        
+        # 마지막 파트 저장
+        if current_files:
+            self._save_part(files_data, start_idx, len(files_data), part_num)
+        
+        return part_num
+
+    def _save_part(self, files_data, start_idx, end_idx, part_num):
+        """파트 저장"""
+        content = self.create_output_content(files_data, start_idx, end_idx, part_num)
+        output_file = self.output_dir / f"project_code_part_{part_num:02d}.txt"
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        file_size = len(content)
+        print(f"\n💾 저장됨: {output_file.name} ({file_size:,} chars, {end_idx - start_idx} files)")
+
+    def auto_batch_for_upload(self, max_batch_size=10):
+        """챗봇 10개 제한을 고려해서 자동 배치 생성"""
+        part_files = sorted(self.output_dir.glob("project_code_part_*.txt"))
+        
+        if not part_files:
+            print("⚠️ 배치할 파트 파일이 없습니다.")
+            return
+        
+        print(f"\n📦 총 {len(part_files)}개 파트를 배치로 정리 중...")
+        print("=" * 80)
+        
+        batch_num = 1
+        batch_content = []
+        part_count = 0
+        
+        for part_file in part_files:
+            with open(part_file, 'r', encoding='utf-8') as f:
+                batch_content.append(f.read())
+            
+            part_count += 1
+            
+            # max_batch_size개마다 저장
+            if part_count >= max_batch_size:
+                self._save_batch(batch_content, batch_num, part_count)
+                batch_num += 1
+                batch_content = []
+                part_count = 0
+        
+        # 남은 파트 저장
+        if batch_content:
+            self._save_batch(batch_content, batch_num, part_count)
+        
+        print("=" * 80)
+        print(f"✅ 총 {batch_num}개 배치 생성 완료!")
+        print(f"💡 upload_batch_*.txt 파일들을 챗봇에 순서대로 업로드하세요!")
+
+    def _save_batch(self, batch_content, batch_num, part_count):
+        """배치 저장"""
+        batch_text = "\n\n" + "=" * 80 + "\n\n".join(batch_content)
+        output_file = self.output_dir / f"upload_batch_{batch_num:02d}.txt"
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(batch_text)
+        
+        file_size = len(batch_text)
+        print(f"✅ Batch {batch_num:02d}: {part_count}개 파트 → {output_file.name} ({file_size:,} chars)")
+
+    def create_index_file(self, files_data, total_parts):
+        """인덱스 파일 생성"""
+        index_content = []
+        
+        index_content.append("=" * 80)
+        index_content.append("프로젝트 코드 수집 인덱스")
+        index_content.append(f"생성 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        index_content.append(f"프로젝트 경로: {self.project_root}")
+        index_content.append("=" * 80)
+        index_content.append("")
+        
+        # 통계
+        index_content.append("📊 수집 통계:")
+        index_content.append(f" - 총 파일 수: {len(files_data)}개")
+        index_content.append(f" - 총 문자 수: {sum(f['size'] for f in files_data):,}자")
+        index_content.append(f" - 분할된 파트 수: {total_parts}개")
+        index_content.append(f" - 파트당 최대 크기: {self.max_chars_per_file:,}자")
+        index_content.append("")
+        
+        # 확장자별 통계
+        ext_stats = {}
+        for file_info in files_data:
+            ext = file_info['extension']
+            if ext not in ext_stats:
+                ext_stats[ext] = {'count': 0, 'size': 0}
+            ext_stats[ext]['count'] += 1
+            ext_stats[ext]['size'] += file_info['size']
+        
+        index_content.append("📈 확장자별 통계:")
+        for ext, stats in sorted(ext_stats.items()):
+            lang = self.extension_to_lang.get(ext, '일반')
+            index_content.append(f" {ext:>6} ({lang:12}): {stats['count']:>3}개 파일, {stats['size']:>10,}자")
+        index_content.append("")
+        
+        # 전체 파일 목록
+        index_content.append("=" * 80)
+        index_content.append("📂 전체 파일 목록:")
+        index_content.append("=" * 80)
+        for i, file_info in enumerate(files_data, 1):
+            ext = file_info['extension']
+            lang = self.extension_to_lang.get(ext, '?')
+            index_content.append(
+                f"{i:3d}. [{lang:>10}] {file_info['path']:<55} {file_info['size']:>8,}자"
+            )
+        
+        # 저장
+        index_file = self.output_dir / "INDEX.txt"
+        with open(index_file, 'w', encoding='utf-8') as f:
+            f.write("\n".join(index_content))
+        
+        print(f"📋 인덱스 파일 생성: {index_file.name}")
+
+    def run(self):
+        """전체 프로세스 실행 - 스마트 분할 + 자동 배치까지!"""
+        print("=" * 80)
+        print("🚀 프로젝트 코드 수집 시작")
+        print("=" * 80)
+        print(f"📍 프로젝트 경로: {self.project_root.absolute()}")
+        print(f"📁 출력 디렉터리: {self.output_dir}")
+        print(f"⚙️  파일당 최대 크기: {self.max_chars_per_file:,}자")
+        print("=" * 80)
+        print()
+        
+        # 파일 수집
+        print("📥 파일 수집 중...")
+        files_data = self.collect_files()
+        
+        if not files_data:
+            print("\n⚠️ 수집된 파일이 없습니다.")
+            return
+        
+        print(f"\n✅ 총 {len(files_data)}개 파일 수집 완료")
+        print(f"📊 총 {sum(f['size'] for f in files_data):,}자")
+        
+        # 파일 분할 및 저장
+        print("\n💾 파일 분할 및 저장 중...")
+        total_parts = self.split_and_save(files_data)
+        
+        # 인덱스 파일 생성
+        self.create_index_file(files_data, total_parts)
+        
+        # 자동 배치 생성 (스마트 분할!)
+        self.auto_batch_for_upload(max_batch_size=10)
+        
+        print("\n" + "=" * 80)
+        print("✨ 코드 수집 완료!")
+        print("=" * 80)
+        print(f"📁 출력 디렉터리: {self.output_dir.absolute()}")
+        print(f"📄 생성된 파일:")
+        print(f"   - {total_parts}개 파트 파일 (project_code_part_*.txt)")
+        print(f"   - N개 배치 파일 (upload_batch_*.txt) ← 이것들을 챗봇에 올리세요!")
+        print(f"   - 1개 인덱스 파일 (INDEX.txt)")
+        print("\n💡 각 파일은 코드 블록(```언어)으로 감싸져 있어 챗봇이 쉽게 인식합니다!")
+        print("=" * 80)
+
+
+if __name__ == "__main__":
+    # 현재 스크립트가 있는 위치를 프로젝트 루트로 자동 설정
+    PROJECT_ROOT = Path(__file__).parent
+    
+    # 수집기 생성 (파일당 5만자로 제한 - 더 잘게 나눔)
+    collector = ProjectCodeCollector(
+        project_root=PROJECT_ROOT,
+        output_dir="code_collection",
+        max_chars_per_file=50000  # 5만자 = 약 25-50KB 텍스트 (개선됨)
+    )
+    
+    # 실행 (수집 → 분할 → 배치 모두 자동!)
+    collector.run()
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\output.cve-bin-tool.2025-12-24.09-33-07.json
+파일 크기: 2 characters
+확장자: .json (json)
+================================================================================
+
+```json
+[]
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\run.py
+파일 크기: 141 characters
+확장자: .py (python)
+================================================================================
+
+```python
+from app import create_app
+
+app = create_app()
+
+if __name__ == "__main__":
+    # 필요하면 debug=True 로 변경
+    app.run(host="0.0.0.0", port=8000)
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\test_zap_win.py
+파일 크기: 1,434 characters
+확장자: .py (python)
+================================================================================
+
+```python
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from app.core.scanner.zap_scanner import ZapScanner
+import json
+
+print("=" * 70)
+print("ZAP Scan (Windows)")
+print("=" * 70)
+
+scanner = ZapScanner(
+    api_key='change-me-9203935709',
+    proxy_host='127.0.0.1',
+    proxy_port=8080,
+    timeout=600
+)
+
+print("스캔 시작...\n")
+result = scanner.full_scan(
+    target_url='http://localhost:3000',
+    run_spider=True,
+    run_active=False,
+    risk_levels=['High', 'Medium', 'Low', 'Informational']
+)
+
+if 'error' not in result:
+    summary = result['summary']
+    print("\n✓ 스캔 완료!")
+    print(f"  - URL: {len(result['spider_result'].get('urls_found', []))}개")
+    print(f"  - Alert: {summary.get('total_alerts', 0)}개")
+    print(f"  - 🔴 High: {summary.get('high', 0)}개")
+    print(f"  - 🟠 Medium: {summary.get('medium', 0)}개")
+    print(f"  - 🟡 Low: {summary.get('low', 0)}개")
+    
+    alerts = result.get('alerts', [])
+    for risk in ['High', 'Medium']:
+        risk_alerts = [a for a in alerts if a['risk'] == risk]
+        if risk_alerts:
+            print(f"\n{risk} Alerts:")
+            for idx, alert in enumerate(risk_alerts[:10], 1):
+                print(f"  [{idx}] {alert['alert']}")
+    
+    with open('zap_result.json', 'w', encoding='utf-8') as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+    print(f"\n💾 결과: zap_result.json")
+else:
+    print(f"✗ 실패: {result['error']}")
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\zap_full_scan_20251230_104526.json
+파일 크기: 474 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+  "target": "http://localhost:3000",
+  "spider_result": {
+    "scan_id": "1",
+    "status": "completed",
+    "urls_found": [
+      "http://localhost:3000/robots.txt",
+      "http://localhost:3000/sitemap.xml",
+      "http://localhost:3000"
+    ],
+    "progress": 100
+  },
+  "active_scan_result": {
+    "scan_id": null,
+    "status": "failed",
+    "progress": 0,
+    "error": "invalid literal for int() with base 10: 'does_not_exist'"
+  },
+  "alerts": [],
+  "summary": {}
+}
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\zap_full_scan_20251230_104743.json
+파일 크기: 512 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+  "target": "http://localhost:3000",
+  "spider_result": {
+    "scan_id": "2",
+    "status": "completed",
+    "urls_found": [
+      "http://localhost:3000/robots.txt",
+      "http://localhost:3000/sitemap.xml",
+      "http://localhost:3000"
+    ],
+    "progress": 100
+  },
+  "active_scan_result": {
+    "scan_id": "url_not_found",
+    "status": "completed",
+    "progress": 100
+  },
+  "alerts": [],
+  "summary": {
+    "total_alerts": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 0
+  }
+}
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\zap_full_scan_20251230_104918.json
+파일 크기: 586 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+  "target": "http://localhost:3000",
+  "spider_result": {
+    "scan_id": "3",
+    "status": "completed",
+    "urls_found": [
+      "http://localhost:3000/robots.txt",
+      "http://localhost:3000/sitemap.xml",
+      "http://localhost:3000"
+    ],
+    "progress": 100
+  },
+  "active_scan_result": {
+    "scan_id": null,
+    "status": "failed",
+    "progress": 0,
+    "error": "Invalid scan ID: url_not_found. Target URL may not be in ZAP's site tree."
+  },
+  "alerts": [],
+  "summary": {
+    "total_alerts": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 0
+  }
+}
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\zap_full_scan_20251230_105112.json
+파일 크기: 586 characters
+확장자: .json (json)
+================================================================================
+
+```json
+{
+  "target": "http://localhost:3000",
+  "spider_result": {
+    "scan_id": "4",
+    "status": "completed",
+    "urls_found": [
+      "http://localhost:3000/robots.txt",
+      "http://localhost:3000/sitemap.xml",
+      "http://localhost:3000"
+    ],
+    "progress": 100
+  },
+  "active_scan_result": {
+    "scan_id": null,
+    "status": "failed",
+    "progress": 0,
+    "error": "Invalid scan ID: url_not_found. Target URL may not be in ZAP's site tree."
+  },
+  "alerts": [],
+  "summary": {
+    "total_alerts": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 0
+  }
+}
+```
+
+--------------------------------------------------------------------------------

