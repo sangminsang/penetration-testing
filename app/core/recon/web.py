@@ -2604,22 +2604,18 @@ def detect_libraries_from_js_deep(target: str) -> List[Dict[str, Any]]:
     print(f"[WEB-ENHANCED] Scan completed: {len(unique_techs)} unique technologies")
     print("=" * 70)
     
-    return {
-        'httpheaders': {},
-        'javascriptlibraries': [],
-        'exposedfiles': [],
-        'webtechnologies': unique_techs,  # ⭐ 13개 기술!
-        'packageinfo': {},
-        'wafinfo': {},
-        'cmsinfo': {},
-        'securityheaders': {},
-        'apiendpoints': js_api_endpoints if 'js_api_endpoints' in locals() else [],
-        'discoveredpaths': ffuf_endpoints if 'ffuf_endpoints' in locals() else [],
-        'multitoolsresults': {
-            'totaltools': 11,
-            'technologiesfound': len(unique_techs)  # ⭐ 핵심!
-        },
-        'spadetection': spa_info if 'spa_info' in locals() else {},
-        'jsanalysis': {},
-        'requiresdynamicscan': False
-    }
+    # Final conversion to ensure all items are dicts with evidence
+    processed_results = []
+    seen = set()
+    for t in all_technologies:
+        name = t if isinstance(t, str) else t.get("name")
+        if not name or name in seen: continue
+        
+        if isinstance(t, str):
+            processed_results.append({"name": t, "version": "N/A", "source": "Integrated", "evidence": "Found during multi-tool scan"})
+        else:
+            processed_results.append(t)
+        seen.add(name)
+    
+    print(f"[WEB] Finalized {len(processed_results)} tech objects")
+    return processed_results

@@ -369,13 +369,16 @@ if __name__ == "__main__":
 ==================================================
 File: run.py
 ==================================================
-from app import create_app
+import eventlet
+eventlet.monkey_patch() # 이 코드가 맨 위에 와야 합니다!
 
-app = create_app()
+from app import create_app, socketio
+
+app, _ = create_app()
 
 if __name__ == "__main__":
-    # 필요하면 debug=True 로 변경
-    app.run(host="0.0.0.0", port=8000)
+    # 포트 5000에서 실행
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
 
 
 ==================================================
@@ -1513,6 +1516,25 @@ if __name__ == "__main__":
 
 
 ==================================================
+File: app\models.py
+==================================================
+from app import db
+from datetime import datetime
+
+class Project(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    target = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class ScanResult(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    data = db.Column(db.JSON)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+==================================================
 File: app\nmap_recon.py
 ==================================================
 import nmap
@@ -2074,286 +2096,75 @@ class NvdClient:
 ==================================================
 File: app\routes.py
 ==================================================
-# app/routes.py
-
-from flask import Blueprint, render_template, request, jsonify, current_app
-
-from .nmap_recon import run_recon
-from .ai_client import build_prompt, call_ollama
-from .loot_generator import enrich_loot
-from .nvd_client import NvdClient
-from .searchsploit_client import search_exploits_for_cves
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for
+from app.models import Project, ScanResult
+from app import db
+import re
 
 bp = Blueprint("main", __name__)
 
-
-def score_cve_exploitability(cve_item: dict, exploit_map: dict) -> int:
-    """
-    CVE의 실제 공격 가능성 점수 계산 (높을수록 우선순위).
-    """
-    score = 0
-
-    # 1. CVSS 기본 점수
-    cvss = cve_item.get("cvss", 0)
-    if cvss >= 9.0:
-        score += 10
-    elif cvss >= 7.0:
-        score += 5
-
-    # 2. Searchsploit에 실제 exploit 있으면 대폭 가산
-    if cve_item.get("cve_id") in exploit_map:
-        score += 20
-
-    # 3. 최근 CVE일수록 높은 점수 (2024년 이후)
-    try:
-        year = int(cve_item.get("cve_id", "CVE-2000-0000").split("-")[1])
-        if year >= 2024:
-            score += 15
-        elif year >= 2022:
-            score += 5
-    except:
-        pass
-
-    return score
-
-
-def build_attack_chains(recon_result, all_cves, exploit_map):
-    """
-    여러 CVE를 엮은 공격 체인 후보를 만든다.
-    exploit_map을 참고하여 실제 공격 가능한 CVE 우선 배치.
-    """
-    chains = []
-    chain_id = 1
-
-    # CVE들을 공격 가능성 점수로 정렬
-    scored_cves = [
-        (cve, score_cve_exploitability(cve, exploit_map)) for cve in all_cves
-    ]
-    scored_cves.sort(key=lambda x: x[1], reverse=True)
-
-    # 역할별로 분류 (높은 점수 우선)
-    initial = [c for c, s in scored_cves if c.get("cvss", 0) >= 7.0]
-    privesc = [
-        c
-        for c, s in scored_cves
-        if "privilege" in (c.get("description") or "").lower()
-    ]
-    exfil = [
-        c
-        for c, s in scored_cves
-        if "sql" in (c.get("description") or "").lower()
-        or "information disclosure" in (c.get("description") or "").lower()
-        or "data leak" in (c.get("description") or "").lower()
-    ]
-
-    print("[DEBUG] initial_access 후보 CVE 수:", len(initial))
-    print("[DEBUG] privesc 후보 CVE 수:", len(privesc))
-    print("[DEBUG] exfil 후보 CVE 수:", len(exfil))
-
-    if not initial:
-        return chains
-
-    max_chain = 3
-    for i, init_cve in enumerate(initial[:max_chain]):
-        chain_steps = []
-
-        host_ip = init_cve.get("host_ip") or (
-            recon_result[0].get("ip") if recon_result else "127.0.0.x"
-        )
-        service = init_cve.get("service") or "unknown"
-        port = init_cve.get("port")
-
-        # 1단계: initial_access
-        chain_steps.append(
-            {
-                "step": 1,
-                "role": "initial_access",
-                "cve_id": init_cve.get("cve_id"),
-                "cvss": init_cve.get("cvss"),
-                "service": service,
-                "port": port,
-            }
-        )
-
-        step_num = 2
-
-        # 2단계: privilege_escalation
-        if privesc:
-            pe = privesc[i % len(privesc)]
-            chain_steps.append(
-                {
-                    "step": step_num,
-                    "role": "privilege_escalation",
-                    "cve_id": pe.get("cve_id"),
-                    "cvss": pe.get("cvss"),
-                    "service": pe.get("service") or "unknown",
-                    "port": pe.get("port"),
-                }
-            )
-            step_num += 1
-
-        # 3단계: data_exfiltration
-        if exfil:
-            de = exfil[i % len(exfil)]
-            chain_steps.append(
-                {
-                    "step": step_num,
-                    "role": "data_exfiltration",
-                    "cve_id": de.get("cve_id"),
-                    "cvss": de.get("cvss"),
-                    "service": de.get("service") or "unknown",
-                    "port": de.get("port"),
-                }
-            )
-
-        chains.append(
-            {
-                "chain_id": chain_id,
-                "host_ip": host_ip,
-                "steps": chain_steps,
-            }
-        )
-        chain_id += 1
-
-    print("[DEBUG] 생성된 체인 개수:", len(chains))
-    return chains
-
-
-@bp.route("/")
+@bp.route('/')
 def index():
-    return render_template("dashboard.html")
+    return redirect(url_for('main.projects'))
 
+@bp.route('/projects')
+def projects():
+    all_projects = Project.query.all()
+    return render_template('projects.html', projects=all_projects)
 
-@bp.route("/api/scan", methods=["POST"])
-def api_scan():
-    data = request.get_json() or {}
-    target = data.get("target")
+@bp.route('/project/new', methods=['POST'])
+def create_project():
+    name, target = request.form.get('name'), request.form.get('target')
+    if name and target:
+        db.session.add(Project(name=name, target=target))
+        db.session.commit()
+    return redirect(url_for('main.projects'))
 
-    if not target:
-        return jsonify({"error": "target is required"}), 400
+@bp.route('/project/delete/<int:project_id>', methods=['POST'])
+def delete_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    ScanResult.query.filter_by(project_id=project_id).delete()
+    db.session.delete(project)
+    db.session.commit()
+    return redirect(url_for('main.projects'))
 
-    # 1. Recon
-    recon_result = run_recon(
-        target,
-        nmap_args=current_app.config["NMAP_ARGS"],
-        mask=current_app.config.get("MASK_REAL_IP", True),
-    )
-    print("[DEBUG] Recon 결과 호스트 수:", len(recon_result))
+@bp.route('/live-scan/<int:project_id>')
+def live_scan(project_id):
+    project = Project.query.get_or_404(project_id)
+    return render_template('live_scan.html', project=project)
 
-    # 2. NVD 클라이언트 준비
-    nvd = NvdClient()
+@bp.route('/url-tree/<int:project_id>')
+def url_tree(project_id):
+    project = Project.query.get_or_404(project_id)
+    return render_template('url_tree.html', project=project)
 
-    all_cves = []
+@bp.route('/api/project/<int:project_id>/tree-data')
+def get_tree_data(project_id):
+    last_scan = ScanResult.query.filter_by(project_id=project_id).order_by(ScanResult.timestamp.desc()).first()
+    project = Project.query.get(project_id)
+    tree = {"name": project.target, "children": []}
+    
+    if not last_scan or not last_scan.data.get('urls'):
+        return jsonify(tree)
 
-    for host in recon_result:
-        host_ip = host.get("ip")
-        for port in host.get("ports", []):
-            product = port.get("product")
-            service_name = port.get("service")
-            version_raw = port.get("version")
-            full_version = port.get("full_version")
-
-            if not product and not service_name:
-                port["cves"] = []
-                continue
-
-            # 버전 파싱 및 정규화 (복잡한 버전 문자열에서 실제 버전만 추출)
-            from .core.cve.matcher import parse_and_normalize_version, extract_product_from_version_string
-            
-            version = None
-            if version_raw:
-                version = parse_and_normalize_version(version_raw)
-            
-            # full_version에서도 버전 추출 시도
-            if not version and full_version:
-                version = parse_and_normalize_version(full_version)
-            
-            # product가 없고 full_version에 제품명이 포함된 경우 추출
-            if not product and full_version:
-                extracted_product = extract_product_from_version_string(full_version)
-                if extracted_product:
-                    product = extracted_product
-                    print(f"[DEBUG] full_version에서 제품명 추출: {extracted_product}")
-
-            # 하이브리드 검색: CPE 우선, 실패 시 키워드 검색
-            # 키워드 폴백용 문자열 생성
-            keyword_fallback = None
-            if full_version:
-                parts = full_version.split()
-                if parts:
-                    keyword_fallback = parts[0].split("/")[0]
-            if not keyword_fallback and product:
-                keyword_fallback = product
-            if not keyword_fallback:
-                keyword_fallback = service_name or "unknown"
-
-            print(f"[DEBUG] 하이브리드 검색 시작: product={product!r}, version={version!r} (원본: {version_raw!r}), keyword_fallback={keyword_fallback!r}")
-
-            try:
-                # 하이브리드 검색 실행 (CPE 우선, 실패 시 키워드)
-                nvd_items = nvd.search_hybrid(
-                    product=product or service_name or "unknown",
-                    version=version,
-                    keyword_fallback=keyword_fallback,
-                    max_pages=1,
-                )
-                print(f"[DEBUG] 하이브리드 검색 결과 (필터링 전): {len(nvd_items)}개")
-
-                # is_vulnerable=True인 것만 남김 (강화된 필터링 적용됨)
-                nvd_items = [
-                    item for item in nvd_items if item.get("is_vulnerable", False)
-                ]
-                print(f"[DEBUG] 하이브리드 검색 결과 (필터링 후): {len(nvd_items)}개")
-
-            except Exception as e:
-                print(f"[WARN] 하이브리드 검색 실패: product={product!r}, version={version!r}, err={e}")
-                nvd_items = []
-
-            # 각 CVE에 host/port/service 정보 태깅
-            for item in nvd_items:
-                item["host_ip"] = host_ip
-                item["service"] = service_name or product
-                item["port"] = port.get("port")
-
-            port["cves"] = nvd_items
-            all_cves.extend(nvd_items)
-
-    print("[DEBUG] 전체 CVE 수 (필터링 후):", len(all_cves))
-
-    # 3. Searchsploit으로 exploit 제목/ID 매핑
-    unique_cve_ids = sorted({c["cve_id"] for c in all_cves if c.get("cve_id")})
-    exploit_map = search_exploits_for_cves(unique_cve_ids, max_per_cve=5)
-    print("[DEBUG] Searchsploit 매핑된 CVE 수:", len(exploit_map))
-
-    # 4. 공격 체인 후보 생성 (exploit 우선순위 반영)
-    chains = build_attack_chains(recon_result, all_cves, exploit_map)
-
-    # 5. AI 시나리오 생성
-    if all_cves and chains:
-        prompt = build_prompt(all_cves, recon_result, chains, exploit_map)
-        ai_result = call_ollama(prompt)
-    else:
-        ai_result = {
-            "selected_chains": [],
-            "scenario": ["[경고] 매핑된 CVE가 없어 공격 시나리오 생성을 건너뜀."],
-            "proof": {"loot_files": [], "logs": []},
-        }
-
-    scenario = ai_result.get("scenario", [])
-    proof = enrich_loot(ai_result.get("proof"))
-    selected_chains = ai_result.get("selected_chains", [])
-
-    # 6. 프론트엔드 응답
-    response = {
-        "recon": recon_result,
-        "cves": all_cves,
-        "chains": selected_chains,
-        "scenario": scenario,
-        "proof": proof,
-        "exploits": exploit_map,
-    }
-
-    return jsonify(response)
+    # 고유 URL 정렬
+    urls = sorted(list(set(last_scan.data['urls'])))
+    for url in urls:
+        # 경로 추출 (도메인 이후 부분)
+        path_str = url.replace(project.target, "").strip("/")
+        if not path_str: continue
+        
+        parts = [p for p in path_str.split('/') if p]
+        curr = tree['children']
+        for p in parts:
+            node = next((item for item in curr if item["name"] == p), None)
+            if not node:
+                new_node = {"name": p, "children": []}
+                curr.append(new_node)
+                curr = new_node["children"]
+            else:
+                curr = node["children"]
+    return jsonify(tree)
 
 
 ==================================================
@@ -2563,16 +2374,34 @@ print("=" * 60)
 File: app\__init__.py
 ==================================================
 from flask import Flask
-from .config import Config
+from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO
+import os
+
+db = SQLAlchemy()
+socketio = SocketIO()
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(Config)
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, '../project.db')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SECRET_KEY'] = 'security-secret-key'
 
-    from .api.routes import bp as main_bp
-    app.register_blueprint(main_bp)
+    db.init_app(app)
+    socketio.init_app(app, cors_allowed_origins="*")
 
-    return app
+    # 웹소켓 핸들러 등록
+    from app.api.websocket import register_socketio_handlers, ScanProgressEmitter
+    register_socketio_handlers(socketio, ScanProgressEmitter(socketio))
+
+    from app.routes import bp
+    app.register_blueprint(bp)
+
+    with app.app_context():
+        db.create_all()
+
+    return app, socketio
 
 
 ==================================================
@@ -4021,6 +3850,285 @@ def api_deep_fingerprint():
     except Exception as e:
         logger.exception(f"[DEEP-FP] Scan failed: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# URL Tree Mapping API - Hierarchical Structure Visualization
+# ============================================================================
+
+@bp.route('/api/url-tree', methods=['POST'])
+def url_tree():
+    """
+    URL Tree Mapping - 계층적 URL 구조 시각화
+    
+    Features:
+    1. Recursive web crawling
+    2. Smart directory discovery
+    3. Hierarchical tree building
+    4. Vulnerability mapping to nodes
+    
+    Request body:
+        {
+            "target": "http://example.com",
+            "max_depth": 3,
+            "max_urls": 500,
+            "enable_crawler": true,
+            "enable_discovery": true
+        }
+    
+    Returns:
+        {
+            "tree": {...},
+            "statistics": {...},
+            "duration": 12.34
+        }
+    """
+    try:
+        data = request.get_json()
+        target = data.get('target')
+        
+        if not target:
+            return jsonify({'error': 'Target URL required'}), 400
+        
+        logger.info(f"[URL-TREE] Starting URL tree mapping for {target}")
+        
+        # Configuration
+        max_depth = data.get('max_depth', 3)
+        max_urls = data.get('max_urls', 500)
+        enable_crawler = data.get('enable_crawler', True)
+        enable_discovery = data.get('enable_discovery', True)
+        
+        start_time = time.time()
+        
+        all_urls = []
+        
+        # ===================================
+        # Phase 1: Web Crawling
+        # ===================================
+        if enable_crawler:
+            logger.info(f"[URL-TREE] Phase 1: Crawling (depth: {max_depth}, max: {max_urls})")
+            
+            try:
+                from ..core.recon.crawler import crawl_target
+                
+                crawler_result = crawl_target(
+                    target_url=target,
+                    max_depth=max_depth,
+                    max_urls=max_urls
+                )
+                
+                all_urls.extend(crawler_result['urls'])
+                
+                logger.info(f"[URL-TREE] Crawler found {len(crawler_result['urls'])} URLs, "
+                           f"{len(crawler_result['api_endpoints'])} API endpoints")
+                
+            except Exception as e:
+                logger.error(f"[URL-TREE] Crawler failed: {e}")
+        
+        # ===================================
+        # Phase 2: Smart Discovery
+        # ===================================
+        if enable_discovery:
+            logger.info(f"[URL-TREE] Phase 2: Smart directory discovery")
+            
+            try:
+                from ..core.recon.discovery import discover_endpoints
+                
+                discovery_result = discover_endpoints(
+                    target_url=target,
+                    max_depth=max_depth,
+                    threads=10
+                )
+                
+                all_urls.extend(discovery_result['endpoints'])
+                
+                logger.info(f"[URL-TREE] Discovery found {len(discovery_result['endpoints'])} endpoints")
+                
+            except Exception as e:
+                logger.error(f"[URL-TREE] Discovery failed: {e}")
+        
+        # ===================================
+        # Phase 3: Get CVE & Tech data
+        # ===================================
+        logger.info(f"[URL-TREE] Phase 3: Fetching vulnerability and technology data")
+        
+        cves = []
+        technologies = []
+        
+        try:
+            # Deep Fingerprinting으로 기술 탐지
+            from ..core.recon.fingerprint import deep_fingerprint
+            
+            fp_result = deep_fingerprint(target)
+            
+            # 모든 레이어에서 기술 수집
+            for layer in fp_result.get('layers', []):
+                technologies.extend(layer.get('technologies', []))
+            
+            logger.info(f"[URL-TREE] Collected {len(technologies)} technologies")
+            
+        except Exception as e:
+            logger.warning(f"[URL-TREE] Could not fetch fingerprint data: {e}")
+        
+        # TODO: CVE 데이터도 가져오기 (기존 스캔 결과 활용)
+        
+        # ===================================
+        # Phase 4: Build Tree Structure
+        # ===================================
+        logger.info(f"[URL-TREE] Phase 4: Building hierarchical tree")
+        
+        try:
+            from ..core.recon.mapper import build_url_tree
+            
+            tree_result = build_url_tree(
+                urls=all_urls,
+                base_url=target,
+                cves=cves if cves else None,
+                technologies=technologies if technologies else None
+            )
+            
+            duration = time.time() - start_time
+            
+            logger.info(f"[URL-TREE] Tree built successfully in {duration:.2f}s")
+            logger.info(f"[URL-TREE] Statistics: {tree_result['statistics']}")
+            
+            # Add metadata
+            result = {
+                'success': True,
+                'target': target,
+                'tree': tree_result['tree'],
+                'statistics': tree_result['statistics'],
+                'total_urls': len(all_urls),
+                'duration': round(duration, 2),
+                'config': {
+                    'max_depth': max_depth,
+                    'max_urls': max_urls,
+                    'crawler_enabled': enable_crawler,
+                    'discovery_enabled': enable_discovery
+                }
+            }
+            
+            return jsonify(result)
+            
+        except Exception as e:
+            logger.exception(f"[URL-TREE] Tree building failed: {e}")
+            return jsonify({'error': f'Tree building failed: {str(e)}'}), 500
+        
+    except Exception as e:
+        logger.exception(f"[URL-TREE] Request failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/url-tree')
+def url_tree_page():
+    """URL Tree 시각화 페이지"""
+    return render_template('url_tree.html')
+
+@bp.route('/live-scan')
+def live_scan_page():
+    """실시간 스캔 대시보드 페이지"""
+    return render_template('live_scan.html')
+
+
+==================================================
+File: app\api\websocket.py
+==================================================
+from flask_socketio import emit
+from flask import request
+from app.models import ScanResult, Project
+from app import db, create_app
+import traceback
+import requests
+import re
+
+class ScanProgressEmitter:
+    def __init__(self, socketio):
+        self.socketio = socketio
+
+    def emit_log(self, msg, stage='info', progress=0):
+        self.socketio.emit('scan_progress', {'stage': stage, 'progress': progress, 'current_item': msg})
+
+    def emit_tech(self, name, version=None, source="Recon", evidence=""):
+        # 실무자를 위한 상세 증거(evidence)를 포함하여 전송
+        self.socketio.emit('technology_detected', {
+            'name': name, 
+            'version': version, 
+            'source': source,
+            'evidence': evidence
+        })
+
+    def emit_url(self, url, status_code=None):
+        self.socketio.emit('url_discovered', {'url': url, 'status_code': status_code})
+
+def register_socketio_handlers(socketio, scan_emitter):
+    @socketio.on('start_scan')
+    def handle_start_scan(data):
+        target = data.get('target')
+        project = Project.query.filter_by(target=target).first()
+        socketio.start_background_task(run_integrated_scan, target, project.id if project else None, scan_emitter)
+
+def run_integrated_scan(target, project_id, emitter):
+    scan_data = {'technologies': [], 'urls': []}
+    try:
+        emitter.emit_log(f"🕵️ 정찰 분석 개시: {target}", 'init', 5)
+        
+        # 1. L4 정찰: Nmap 포트 분석 및 서비스 배너 추출
+        from app.nmap_recon import run_recon
+        clean_host = re.sub(r'^https?://', '', target).split('/')[0].split(':')[0]
+        emitter.emit_log("📡 [Network] 포트 스캔 및 서비스 배너 수집 중...", 'recon', 20)
+        nmap_res = run_recon(clean_host)
+        if nmap_res:
+            for host in nmap_res:
+                for port in host.get('ports', []):
+                    if port.get('product'):
+                        evidence = f"Port {port['port']}/{port['protocol']} open. Banner: {port['product']} {port.get('version', '')}"
+                        emitter.emit_tech(port['product'], port.get('version'), 'Nmap Scan', evidence)
+
+        # 2. L7 정찰: HTTP 응답 헤더 심층 분석
+        emitter.emit_log("🌐 [HTTP] 헤더 메타데이터 및 기술 스택 분석 중...", 'recon', 45)
+        try:
+            resp = requests.get(target, timeout=10, verify=False)
+            # 서버가 보낸 모든 헤더를 증거로 활용
+            raw_headers = "\n".join([f"{k}: {v}" for k, v in resp.headers.items()])
+            
+            # 특정 헤더에서 기술 정보 추출 (Server, X-Powered-By 등)
+            for header_key in ['Server', 'X-Powered-By', 'X-AspNet-Version', 'Via']:
+                val = resp.headers.get(header_key)
+                if val:
+                    emitter.emit_tech(val, source=f"Header: {header_key}", evidence=raw_headers)
+        except: pass
+
+        # 3. Fingerprinting: Wappalyzer 기반의 고정밀 분석 (ActiveX, PHP 등 탐지)
+        from app.core.recon.web import detect_with_wappalyzer
+        emitter.emit_log("🔍 [App] 사이트 지문(Fingerprint) 매칭 중...", 'recon', 70)
+        wapp_results = detect_with_wappalyzer(target)
+        if wapp_results:
+            for tech in wapp_results:
+                # Wappalyzer가 찾은 기술들은 특정 HTML 패턴을 근거로 함
+                evidence = f"Detected via internal pattern matching rules for '{tech['name']}'"
+                emitter.emit_tech(tech['name'], tech.get('version'), "Wappalyzer Engine", evidence)
+
+        # 4. 크롤링 및 결과 저장
+        from app.core.recon.crawler import WebCrawler
+        emitter.emit_log("🕸️ [Structure] 사이트 내부 경로 수집 및 저장 중...", 'crawling', 90)
+        crawler = WebCrawler(target, max_depth=1)
+        crawl_res = crawler.crawl()
+        for u in crawl_res.get('urls', []):
+            url_str = u['url'] if isinstance(u, dict) else u
+            scan_data['urls'].append(url_str)
+            emitter.emit_url(url_str, 200)
+
+        if project_id:
+            app, _ = create_app()
+            with app.app_context():
+                db.session.add(ScanResult(project_id=project_id, data=scan_data))
+                db.session.commit()
+
+        emitter.emit_log("✅ 모든 정찰 작업이 완료되었습니다.", 'completed', 100)
+        emitter.socketio.emit('scan_completed', {})
+
+    except Exception as e:
+        traceback.print_exc()
+        emitter.emit_log(f"❌ 오류 발생: {str(e)}", 'error')
 
 
 ==================================================
@@ -11238,6 +11346,293 @@ def collect_container_info(target: str, nm_scan_result) -> Dict[str, Any]:
 
 
 ==================================================
+File: app\core\recon\crawler.py
+==================================================
+"""
+Advanced Recursive Web Crawler
+- HTML link extraction
+- JavaScript API endpoint discovery  
+- Recursive crawling with depth limit
+- robots.txt & sitemap.xml parsing
+"""
+
+import re
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse, parse_qs
+from typing import Dict, List, Set, Any
+import logging
+import time
+
+logger = logging.getLogger(__name__)
+
+
+class WebCrawler:
+    """Recursive web crawler with smart endpoint discovery"""
+
+    def __init__(
+        self,
+        target_url: str,
+        max_depth: int = 3,
+        max_urls: int = 500,
+        timeout: int = 10,
+        delay: float = 0.1
+    ):
+        self.target_url = target_url
+        self.base_domain = urlparse(target_url).netloc
+        self.max_depth = max_depth
+        self.max_urls = max_urls
+        self.timeout = timeout
+        self.delay = delay
+
+        self.visited_urls: Set[str] = set()
+        self.discovered_urls: List[Dict[str, Any]] = []
+        self.api_endpoints: Set[str] = set()
+
+    def crawl(self) -> Dict[str, Any]:
+        """Start crawling from target URL"""
+        logger.info(f"[CRAWLER] Starting crawl on {self.target_url}")
+
+        start_time = time.time()
+
+        # Parse robots.txt and sitemap.xml first
+        self._parse_robots_txt()
+        self._parse_sitemap()
+
+        # Recursive crawl
+        self._crawl_recursive(self.target_url, depth=0)
+
+        duration = time.time() - start_time
+
+        logger.info(f"[CRAWLER] Completed: {len(self.discovered_urls)} URLs, {len(self.api_endpoints)} API endpoints in {duration:.2f}s")
+
+        return {
+            'urls': self.discovered_urls,
+            'api_endpoints': list(self.api_endpoints),
+            'total_urls': len(self.discovered_urls),
+            'duration': duration
+        }
+
+    def _crawl_recursive(self, url: str, depth: int):
+        """Recursively crawl URL"""
+
+        # Check limits
+        if depth > self.max_depth:
+            logger.debug(f"[CRAWLER] Max depth reached: {url}")
+            return
+
+        if len(self.visited_urls) >= self.max_urls:
+            logger.debug(f"[CRAWLER] Max URLs reached")
+            return
+
+        if url in self.visited_urls:
+            return
+
+        # Only crawl same domain
+        if urlparse(url).netloc != self.base_domain:
+            return
+
+        self.visited_urls.add(url)
+
+        try:
+            logger.debug(f"[CRAWLER] Visiting: {url} (depth: {depth})")
+
+            # Rate limiting
+            time.sleep(self.delay)
+
+            response = requests.get(
+                url,
+                timeout=self.timeout,
+                allow_redirects=True,
+                headers={'User-Agent': 'Mozilla/5.0 (Security Scanner)'}
+            )
+
+            # Store URL info
+            url_info = {
+                'url': url,
+                'status_code': response.status_code,
+                'content_type': response.headers.get('Content-Type', ''),
+                'depth': depth,
+                'size': len(response.content)
+            }
+            self.discovered_urls.append(url_info)
+
+            # Parse HTML for links
+            if 'text/html' in response.headers.get('Content-Type', ''):
+                links = self._extract_html_links(response.text, url)
+
+                # Crawl discovered links
+                for link in links:
+                    self._crawl_recursive(link, depth + 1)
+
+            # Parse JavaScript for API endpoints
+            if 'javascript' in response.headers.get('Content-Type', ''):
+                endpoints = self._extract_js_endpoints(response.text)
+                self.api_endpoints.update(endpoints)
+
+        except Exception as e:
+            logger.warning(f"[CRAWLER] Error crawling {url}: {e}")
+
+    def _extract_html_links(self, html: str, base_url: str) -> List[str]:
+        """Extract all links from HTML"""
+        links = []
+
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # <a> tags
+            for tag in soup.find_all('a', href=True):
+                link = urljoin(base_url, tag['href'])
+                link = self._normalize_url(link)
+                if link:
+                    links.append(link)
+
+            # <script> tags
+            for tag in soup.find_all('script', src=True):
+                link = urljoin(base_url, tag['src'])
+                link = self._normalize_url(link)
+                if link:
+                    links.append(link)
+
+            # <link> tags (CSS)
+            for tag in soup.find_all('link', href=True):
+                link = urljoin(base_url, tag['href'])
+                link = self._normalize_url(link)
+                if link:
+                    links.append(link)
+
+            # <img> tags
+            for tag in soup.find_all('img', src=True):
+                link = urljoin(base_url, tag['src'])
+                link = self._normalize_url(link)
+                if link:
+                    links.append(link)
+
+        except Exception as e:
+            logger.warning(f"[CRAWLER] Error parsing HTML: {e}")
+
+        return links
+
+    def _extract_js_endpoints(self, js_content: str) -> Set[str]:
+        """Extract API endpoints from JavaScript"""
+        endpoints = set()
+
+        # Common API patterns
+        patterns = [
+            r'["\']/api/[a-zA-Z0-9/_-]+["\'"]',  # "/api/users"
+            r'["\']/v[0-9]+/[a-zA-Z0-9/_-]+["\'"]',  # "/v1/products"
+            r'fetch\(["\'"]([^"\'\']+)["\'"]\)',  # fetch("/endpoint")
+            r'axios\.(?:get|post|put|delete)\(["\'"]([^"\'\']+)["\'"]',  # axios.get("/endpoint")
+            r'\$\.(?:get|post|ajax)\(["\'"]([^"\'\']+)["\'"]',  # $.get("/endpoint")
+        ]
+
+        for pattern in patterns:
+            matches = re.findall(pattern, js_content)
+            for match in matches:
+                # Clean up match
+                endpoint = match.strip('\'"\'')
+                if endpoint.startswith('/'):
+                    endpoints.add(endpoint)
+
+        return endpoints
+
+    def _parse_robots_txt(self):
+        """Parse robots.txt for hidden paths"""
+        robots_url = urljoin(self.target_url, '/robots.txt')
+
+        try:
+            response = requests.get(robots_url, timeout=self.timeout)
+            if response.status_code == 200:
+                logger.info(f"[CRAWLER] Found robots.txt")
+
+                for line in response.text.split('\n'):
+                    if line.startswith('Disallow:') or line.startswith('Allow:'):
+                        path = line.split(':', 1)[1].strip()
+                        if path and path != '/':
+                            full_url = urljoin(self.target_url, path)
+                            self.discovered_urls.append({
+                                'url': full_url,
+                                'status_code': 0,
+                                'content_type': 'robots.txt',
+                                'depth': 0,
+                                'size': 0
+                            })
+
+        except Exception as e:
+            logger.debug(f"[CRAWLER] No robots.txt: {e}")
+
+    def _parse_sitemap(self):
+        """Parse sitemap.xml for URLs"""
+        sitemap_urls = [
+            '/sitemap.xml',
+            '/sitemap_index.xml',
+            '/sitemap.xml.gz'
+        ]
+
+        for sitemap_path in sitemap_urls:
+            sitemap_url = urljoin(self.target_url, sitemap_path)
+
+            try:
+                response = requests.get(sitemap_url, timeout=self.timeout)
+                if response.status_code == 200:
+                    logger.info(f"[CRAWLER] Found sitemap: {sitemap_path}")
+
+                    # Extract <loc> URLs
+                    urls = re.findall(r'<loc>([^<]+)</loc>', response.text)
+                    for url in urls:
+                        if urlparse(url).netloc == self.base_domain:
+                            self.discovered_urls.append({
+                                'url': url,
+                                'status_code': 0,
+                                'content_type': 'sitemap.xml',
+                                'depth': 0,
+                                'size': 0
+                            })
+                    break
+
+            except Exception as e:
+                logger.debug(f"[CRAWLER] No sitemap at {sitemap_path}: {e}")
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL (remove fragments, sort params)"""
+        try:
+            parsed = urlparse(url)
+
+            # Remove fragment
+            url = parsed._replace(fragment='').geturl()
+
+            # Only keep same domain
+            if parsed.netloc and parsed.netloc != self.base_domain:
+                return ''
+
+            return url
+
+        except Exception:
+            return ''
+
+
+def crawl_target(target_url: str, max_depth: int = 3, max_urls: int = 500) -> Dict[str, Any]:
+    """
+    Crawl target URL and discover all endpoints
+
+    Args:
+        target_url: Target URL to crawl
+        max_depth: Maximum crawl depth (default: 3)
+        max_urls: Maximum URLs to crawl (default: 500)
+
+    Returns:
+        Dictionary with discovered URLs and API endpoints
+    """
+    crawler = WebCrawler(
+        target_url=target_url,
+        max_depth=max_depth,
+        max_urls=max_urls
+    )
+
+    return crawler.crawl()
+
+
+==================================================
 File: app\core\recon\database.py
 ==================================================
 # app/core/recon/database.py
@@ -11678,6 +12073,295 @@ def collect_database_info(target: str, nm_scan_result) -> Dict[str, Any]:
 
 
 ==================================================
+File: app\core\recon\discovery.py
+==================================================
+"""
+Smart Directory & Endpoint Discovery
+- Hierarchical brute-forcing
+- REST API pattern detection
+- Common path enumeration
+- Response-based filtering
+"""
+
+import requests
+from urllib.parse import urljoin, urlparse
+from typing import Dict, List, Set, Any
+import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logger = logging.getLogger(__name__)
+
+
+class SmartDiscovery:
+    """Smart directory and endpoint discovery with hierarchical enumeration"""
+
+    # REST API common patterns
+    REST_PATTERNS = [
+        'api', 'v1', 'v2', 'v3', 'rest', 'graphql',
+        'users', 'products', 'items', 'posts', 'comments',
+        'admin', 'dashboard', 'panel', 'manage',
+        'auth', 'login', 'register', 'logout', 'token',
+        'upload', 'download', 'files', 'media', 'images',
+        'search', 'query', 'filter',
+        'settings', 'config', 'profile', 'account'
+    ]
+
+    # Common file extensions
+    FILE_EXTENSIONS = [
+        '.php', '.asp', '.aspx', '.jsp', '.json', '.xml',
+        '.html', '.htm', '.txt', '.bak', '.old', '.backup',
+        '.config', '.conf', '.ini', '.yml', '.yaml'
+    ]
+
+    # Common directories
+    COMMON_DIRS = [
+        'admin', 'api', 'assets', 'backup', 'bin', 'config',
+        'data', 'db', 'debug', 'dev', 'dist', 'docs',
+        'downloads', 'files', 'images', 'includes', 'js',
+        'lib', 'logs', 'media', 'old', 'public', 'src',
+        'static', 'temp', 'test', 'tmp', 'uploads', 'vendor'
+    ]
+
+    def __init__(
+        self,
+        target_url: str,
+        max_depth: int = 3,
+        threads: int = 10,
+        timeout: int = 5
+    ):
+        self.target_url = target_url
+        self.base_domain = urlparse(target_url).netloc
+        self.max_depth = max_depth
+        self.threads = threads
+        self.timeout = timeout
+
+        self.discovered: List[Dict[str, Any]] = []
+        self.tested_urls: Set[str] = set()
+
+    def discover(self) -> Dict[str, Any]:
+        """Start smart discovery"""
+        logger.info(f"[DISCOVERY] Starting smart enumeration on {self.target_url}")
+
+        start_time = time.time()
+
+        # Phase 1: Check common directories
+        logger.info(f"[DISCOVERY] Phase 1: Common directories")
+        self._check_common_paths()
+
+        # Phase 2: REST API discovery
+        logger.info(f"[DISCOVERY] Phase 2: REST API patterns")
+        self._discover_rest_apis()
+
+        # Phase 3: Recursive enumeration on discovered paths
+        logger.info(f"[DISCOVERY] Phase 3: Hierarchical enumeration")
+        self._hierarchical_enumeration()
+
+        # Phase 4: Common files in discovered directories
+        logger.info(f"[DISCOVERY] Phase 4: Common files")
+        self._discover_common_files()
+
+        duration = time.time() - start_time
+
+        logger.info(f"[DISCOVERY] Completed: {len(self.discovered)} endpoints in {duration:.2f}s")
+
+        return {
+            'endpoints': self.discovered,
+            'total': len(self.discovered),
+            'duration': duration
+        }
+
+    def _check_common_paths(self):
+        """Check common directories and files"""
+        paths_to_test = []
+
+        # Common directories
+        for dir_name in self.COMMON_DIRS:
+            paths_to_test.append(f'/{dir_name}')
+            paths_to_test.append(f'/{dir_name}/')
+
+        # Common files
+        common_files = [
+            '/robots.txt', '/sitemap.xml', '/.git/config',
+            '/package.json', '/composer.json', '/web.config',
+            '/.env', '/.env.local', '/config.php', '/phpinfo.php',
+            '/admin.php', '/login.php', '/test.php'
+        ]
+        paths_to_test.extend(common_files)
+
+        self._test_paths_parallel(paths_to_test)
+
+    def _discover_rest_apis(self):
+        """Discover REST API endpoints"""
+        api_paths = []
+
+        # /api variations
+        for pattern in self.REST_PATTERNS[:10]:  # Top patterns
+            api_paths.append(f'/api/{pattern}')
+            api_paths.append(f'/api/v1/{pattern}')
+            api_paths.append(f'/api/v2/{pattern}')
+            api_paths.append(f'/v1/{pattern}')
+            api_paths.append(f'/{pattern}/api')
+
+        # GraphQL
+        api_paths.extend([
+            '/graphql', '/graphiql', '/api/graphql',
+            '/v1/graphql', '/console/graphql'
+        ])
+
+        # Swagger/OpenAPI
+        api_paths.extend([
+            '/swagger', '/swagger-ui', '/swagger.json',
+            '/api-docs', '/api/swagger.json', '/openapi.json'
+        ])
+
+        self._test_paths_parallel(api_paths)
+
+    def _hierarchical_enumeration(self):
+        """Recursively enumerate discovered paths"""
+        # Get all discovered directories
+        discovered_dirs = [
+            e['path'] for e in self.discovered
+            if e['status_code'] in [200, 201, 301, 302, 401, 403]
+            and e['path'].endswith('/')
+        ]
+
+        # For each directory, try common sub-paths
+        for base_path in discovered_dirs[:20]:  # Limit to top 20
+            depth = base_path.count('/')
+
+            if depth >= self.max_depth:
+                continue
+
+            sub_paths = []
+            for pattern in self.REST_PATTERNS[:15]:  # Top 15 patterns
+                sub_paths.append(f'{base_path}{pattern}')
+                sub_paths.append(f'{base_path}{pattern}/')
+
+            self._test_paths_parallel(sub_paths)
+
+    def _discover_common_files(self):
+        """Discover common files in found directories"""
+        discovered_dirs = [
+            e['path'] for e in self.discovered
+            if e['status_code'] in [200, 301, 302, 403]
+            and e['path'].endswith('/')
+        ]
+
+        file_paths = []
+        for base_dir in discovered_dirs[:10]:  # Top 10 directories
+            for ext in self.FILE_EXTENSIONS[:10]:  # Top 10 extensions
+                file_paths.append(f'{base_dir}index{ext}')
+                file_paths.append(f'{base_dir}config{ext}')
+                file_paths.append(f'{base_dir}test{ext}')
+
+        self._test_paths_parallel(file_paths)
+
+    def _test_paths_parallel(self, paths: List[str]):
+        """Test multiple paths in parallel"""
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            futures = {
+                executor.submit(self._test_path, path): path
+                for path in paths
+                if path not in self.tested_urls
+            }
+
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result:
+                        self.discovered.append(result)
+                except Exception as e:
+                    logger.debug(f"[DISCOVERY] Error testing path: {e}")
+
+    def _test_path(self, path: str) -> Dict[str, Any]:
+        """Test single path"""
+        if path in self.tested_urls:
+            return None
+
+        self.tested_urls.add(path)
+        full_url = urljoin(self.target_url, path)
+
+        try:
+            response = requests.get(
+                full_url,
+                timeout=self.timeout,
+                allow_redirects=False,
+                headers={'User-Agent': 'Mozilla/5.0 (Security Scanner)'}
+            )
+
+            # Interesting status codes
+            if response.status_code in [200, 201, 301, 302, 401, 403, 500]:
+                logger.info(f"[DISCOVERY] Found: {path} [{response.status_code}]")
+
+                return {
+                    'path': path,
+                    'full_url': full_url,
+                    'status_code': response.status_code,
+                    'content_type': response.headers.get('Content-Type', ''),
+                    'content_length': len(response.content),
+                    'server': response.headers.get('Server', ''),
+                    'interesting': self._is_interesting(response)
+                }
+
+        except requests.Timeout:
+            logger.debug(f"[DISCOVERY] Timeout: {path}")
+        except Exception as e:
+            logger.debug(f"[DISCOVERY] Error: {path} - {e}")
+
+        return None
+
+    def _is_interesting(self, response: requests.Response) -> bool:
+        """Check if response is interesting"""
+        interesting_headers = [
+            'X-Powered-By', 'X-AspNet-Version', 'X-AspNetMvc-Version',
+            'Server', 'X-Generator', 'X-Drupal-Cache'
+        ]
+
+        for header in interesting_headers:
+            if header in response.headers:
+                return True
+
+        # Check for authentication
+        if 'WWW-Authenticate' in response.headers:
+            return True
+
+        # Check content
+        content_lower = response.text.lower()
+        interesting_keywords = [
+            'api', 'graphql', 'swagger', 'admin', 'login',
+            'dashboard', 'debug', 'test', 'config'
+        ]
+
+        for keyword in interesting_keywords:
+            if keyword in content_lower:
+                return True
+
+        return False
+
+
+def discover_endpoints(target_url: str, max_depth: int = 3, threads: int = 10) -> Dict[str, Any]:
+    """
+    Smart endpoint discovery with hierarchical enumeration
+
+    Args:
+        target_url: Target URL
+        max_depth: Maximum directory depth (default: 3)
+        threads: Number of parallel threads (default: 10)
+
+    Returns:
+        Dictionary with discovered endpoints
+    """
+    discovery = SmartDiscovery(
+        target_url=target_url,
+        max_depth=max_depth,
+        threads=threads
+    )
+
+    return discovery.discover()
+
+
+==================================================
 File: app\core\recon\fingerprint.py
 ==================================================
 """
@@ -11752,6 +12436,328 @@ def detect_with_recog(banner: str, banner_type: str = "auto") -> List[Dict[str, 
     
     else:  # auto
         return fingerprinter.match_all(banner)
+
+
+==================================================
+File: app\core\recon\mapper.py
+==================================================
+"""
+URL Tree Mapper
+- Build hierarchical tree structure from URLs
+- Calculate tree statistics
+- Prepare data for visualization
+- Map vulnerabilities to nodes
+"""
+
+from urllib.parse import urlparse
+from typing import Dict, List, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class TreeNode:
+    """Tree node representing a URL path segment"""
+
+    def __init__(self, name: str, path: str = '', parent: Optional['TreeNode'] = None):
+        self.name = name  # Segment name (e.g., 'api', 'users')
+        self.path = path  # Full path (e.g., '/api/users')
+        self.parent = parent
+        self.children: Dict[str, 'TreeNode'] = {}
+
+        # URL metadata
+        self.status_code: int = 0
+        self.content_type: str = ''
+        self.size: int = 0
+        self.method: str = 'GET'
+
+        # Security data
+        self.vulnerabilities: List[Dict[str, Any]] = []
+        self.technologies: List[str] = []
+        self.interesting: bool = False
+
+    def add_child(self, name: str, path: str) -> 'TreeNode':
+        """Add child node"""
+        if name not in self.children:
+            self.children[name] = TreeNode(name, path, self)
+        return self.children[name]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'name': self.name,
+            'path': self.path,
+            'status_code': self.status_code,
+            'content_type': self.content_type,
+            'size': self.size,
+            'method': self.method,
+            'vulnerabilities': self.vulnerabilities,
+            'technologies': self.technologies,
+            'interesting': self.interesting,
+            'children': [child.to_dict() for child in self.children.values()],
+            'vulnerability_count': len(self.vulnerabilities),
+            'max_severity': self._get_max_severity()
+        }
+
+    def _get_max_severity(self) -> float:
+        """Get maximum CVSS score from vulnerabilities"""
+        if not self.vulnerabilities:
+            return 0.0
+        return max([v.get('cvss', 0) for v in self.vulnerabilities])
+
+
+class URLTreeMapper:
+    """Map URLs to hierarchical tree structure"""
+
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+        self.base_domain = urlparse(base_url).netloc
+        self.root = TreeNode('root', '/')
+
+    def build_tree(
+        self,
+        urls: List[Dict[str, Any]],
+        cves: List[Dict[str, Any]] = None,
+        technologies: List[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Build tree structure from URL list
+
+        Args:
+            urls: List of discovered URLs with metadata
+            cves: List of CVE vulnerabilities (optional)
+            technologies: List of detected technologies (optional)
+
+        Returns:
+            Tree structure with statistics
+        """
+        logger.info(f"[MAPPER] Building tree from {len(urls)} URLs")
+
+        # Add URLs to tree
+        for url_data in urls:
+            self._add_url_to_tree(url_data)
+
+        # Map vulnerabilities to tree nodes
+        if cves:
+            self._map_vulnerabilities(cves)
+
+        # Map technologies to tree nodes
+        if technologies:
+            self._map_technologies(technologies)
+
+        # Calculate statistics
+        stats = self._calculate_statistics()
+
+        logger.info(f"[MAPPER] Tree built: {stats['total_nodes']} nodes, {stats['max_depth']} max depth")
+
+        return {
+            'tree': self.root.to_dict(),
+            'statistics': stats,
+            'base_url': self.base_url
+        }
+
+    def _add_url_to_tree(self, url_data: Dict[str, Any]):
+        """Add URL to tree structure"""
+        url = url_data.get('url') or url_data.get('full_url', '')
+
+        # Parse URL path
+        parsed = urlparse(url)
+        path = parsed.path
+
+        if not path or path == '/':
+            # Root URL
+            self.root.status_code = url_data.get('status_code', 0)
+            self.root.content_type = url_data.get('content_type', '')
+            self.root.size = url_data.get('size', 0)
+            return
+
+        # Split path into segments
+        segments = [s for s in path.split('/') if s]
+
+        # Build tree path
+        current_node = self.root
+        current_path = ''
+
+        for i, segment in enumerate(segments):
+            current_path += f'/{segment}'
+
+            # Add or get child node
+            if segment not in current_node.children:
+                current_node = current_node.add_child(segment, current_path)
+            else:
+                current_node = current_node.children[segment]
+
+            # If this is the last segment, add metadata
+            if i == len(segments) - 1:
+                current_node.status_code = url_data.get('status_code', 0)
+                current_node.content_type = url_data.get('content_type', '')
+                current_node.size = url_data.get('size', 0)
+                current_node.interesting = url_data.get('interesting', False)
+
+    def _map_vulnerabilities(self, cves: List[Dict[str, Any]]):
+        """Map CVE vulnerabilities to tree nodes"""
+        logger.info(f"[MAPPER] Mapping {len(cves)} vulnerabilities to tree")
+
+        for cve in cves:
+            # Get affected paths/endpoints
+            product = cve.get('product', '').lower()
+            version = cve.get('version', '')
+
+            # Try to find matching nodes
+            nodes_to_update = self._find_nodes_by_product(product)
+
+            for node in nodes_to_update:
+                vuln_data = {
+                    'cve_id': cve.get('cve_id', 'N/A'),
+                    'cvss': cve.get('cvss', 0),
+                    'severity': cve.get('severity', 'Unknown'),
+                    'description': cve.get('description', ''),
+                    'product': product,
+                    'version': version
+                }
+                node.vulnerabilities.append(vuln_data)
+
+    def _map_technologies(self, technologies: List[Dict[str, Any]]):
+        """Map detected technologies to tree nodes"""
+        logger.info(f"[MAPPER] Mapping {len(technologies)} technologies to tree")
+
+        for tech in technologies:
+            name = tech.get('name', '').lower()
+
+            # Map technology to relevant nodes
+            if 'express' in name or 'node' in name:
+                # Backend - map to API nodes
+                self._add_tech_to_pattern(tech['name'], '/api')
+            elif 'react' in name or 'vue' in name or 'angular' in name:
+                # Frontend - map to root and static assets
+                self._add_tech_to_pattern(tech['name'], '/')
+                self._add_tech_to_pattern(tech['name'], '/static')
+            elif 'nginx' in name or 'apache' in name:
+                # Web server - map to root
+                self.root.technologies.append(tech['name'])
+
+    def _find_nodes_by_product(self, product: str) -> List[TreeNode]:
+        """Find tree nodes related to a product"""
+        nodes = []
+
+        # Search keywords based on product
+        keywords = []
+        if 'express' in product:
+            keywords = ['api', 'rest', 'graphql']
+        elif 'react' in product or 'vue' in product:
+            keywords = ['static', 'assets', 'js']
+        elif 'mysql' in product or 'postgres' in product:
+            keywords = ['api', 'db', 'database']
+
+        # Find nodes matching keywords
+        self._search_nodes(self.root, keywords, nodes)
+
+        # If no specific nodes found, add to root
+        if not nodes:
+            nodes.append(self.root)
+
+        return nodes
+
+    def _search_nodes(self, node: TreeNode, keywords: List[str], results: List[TreeNode]):
+        """Recursively search for nodes matching keywords"""
+        # Check if node name matches any keyword
+        for keyword in keywords:
+            if keyword in node.name.lower():
+                results.append(node)
+                break
+
+        # Search children
+        for child in node.children.values():
+            self._search_nodes(child, keywords, results)
+
+    def _add_tech_to_pattern(self, tech_name: str, pattern: str):
+        """Add technology to nodes matching pattern"""
+        nodes = []
+        self._find_nodes_by_path(self.root, pattern, nodes)
+
+        for node in nodes:
+            if tech_name not in node.technologies:
+                node.technologies.append(tech_name)
+
+    def _find_nodes_by_path(self, node: TreeNode, pattern: str, results: List[TreeNode]):
+        """Find nodes by path pattern"""
+        if pattern.lower() in node.path.lower():
+            results.append(node)
+
+        for child in node.children.values():
+            self._find_nodes_by_path(child, pattern, results)
+
+    def _calculate_statistics(self) -> Dict[str, Any]:
+        """Calculate tree statistics"""
+        stats = {
+            'total_nodes': 0,
+            'max_depth': 0,
+            'total_vulnerabilities': 0,
+            'critical_vulns': 0,  # CVSS >= 9.0
+            'high_vulns': 0,       # CVSS >= 7.0
+            'medium_vulns': 0,     # CVSS >= 4.0
+            'low_vulns': 0,        # CVSS < 4.0
+            'nodes_with_vulns': 0,
+            'technologies_found': set()
+        }
+
+        self._collect_statistics(self.root, 0, stats)
+
+        # Convert set to list
+        stats['technologies_found'] = list(stats['technologies_found'])
+
+        return stats
+
+    def _collect_statistics(self, node: TreeNode, depth: int, stats: Dict[str, Any]):
+        """Recursively collect statistics"""
+        stats['total_nodes'] += 1
+        stats['max_depth'] = max(stats['max_depth'], depth)
+
+        # Vulnerability stats
+        if node.vulnerabilities:
+            stats['nodes_with_vulns'] += 1
+            stats['total_vulnerabilities'] += len(node.vulnerabilities)
+
+            for vuln in node.vulnerabilities:
+                cvss = vuln.get('cvss', 0)
+                if cvss >= 9.0:
+                    stats['critical_vulns'] += 1
+                elif cvss >= 7.0:
+                    stats['high_vulns'] += 1
+                elif cvss >= 4.0:
+                    stats['medium_vulns'] += 1
+                else:
+                    stats['low_vulns'] += 1
+
+        # Technology stats
+        for tech in node.technologies:
+            stats['technologies_found'].add(tech)
+
+        # Recurse children
+        for child in node.children.values():
+            self._collect_statistics(child, depth + 1, stats)
+
+
+def build_url_tree(
+    urls: List[Dict[str, Any]],
+    base_url: str,
+    cves: List[Dict[str, Any]] = None,
+    technologies: List[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Build URL tree structure with vulnerability mapping
+
+    Args:
+        urls: List of discovered URLs
+        base_url: Base target URL
+        cves: List of CVE vulnerabilities (optional)
+        technologies: List of detected technologies (optional)
+
+    Returns:
+        Tree structure with statistics
+    """
+    mapper = URLTreeMapper(base_url)
+    return mapper.build_tree(urls, cves, technologies)
 
 
 ==================================================
@@ -18229,6 +19235,401 @@ def parallel_scan(
 
 
 ==================================================
+File: app\static\css\live_scan.css
+==================================================
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    padding: 30px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid #1976d2;
+}
+
+header h1 {
+    font-size: 2.5em;
+    color: #1976d2;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+header p {
+    color: #666;
+    font-size: 1.1em;
+}
+
+/* Control Panel */
+.control-panel {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 25px;
+}
+
+.input-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.input-row input[type="text"] {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.95);
+}
+
+.checkbox-label {
+    color: white;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 12px 28px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: #1a1a1a;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(67, 233, 123, 0.4);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-secondary {
+    background: white;
+    color: #667eea;
+    border: 2px solid white;
+}
+
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.9);
+}
+
+/* Statistics Cards */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 25px;
+    border-radius: 12px;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.card-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.card-red { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+
+.stat-icon {
+    font-size: 3em;
+}
+
+.stat-content h3 {
+    font-size: 2.5em;
+    margin-bottom: 5px;
+}
+
+.stat-content p {
+    font-size: 1em;
+    opacity: 0.9;
+}
+
+/* Activity Banner */
+.activity-banner {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 25px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    font-size: 1.1em;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+}
+
+.activity-icon {
+    font-size: 1.5em;
+}
+
+/* Main Content Layout */
+.main-content {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.panel {
+    background: #fafafa;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.panel h2 {
+    font-size: 1.4em;
+    color: #333;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+/* Force Graph */
+.graph-panel {
+    min-height: 600px;
+}
+
+.graph-container {
+    background: white;
+    border-radius: 8px;
+    border: 2px solid #e0e0e0;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Progress Panel */
+.progress-panel {
+    flex: 1;
+}
+
+.progress-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.progress-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.progress-label {
+    font-weight: 600;
+    color: #555;
+    font-size: 0.95em;
+}
+
+.progress-bar-container {
+    position: relative;
+    background: #e0e0e0;
+    border-radius: 20px;
+    height: 24px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Log Panel */
+.log-panel {
+    flex: 1;
+    max-height: 400px;
+}
+
+.log-container {
+    background: #1e1e1e;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.log-entry {
+    display: flex;
+    gap: 10px;
+    padding: 8px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.log-icon {
+    font-size: 1.2em;
+}
+
+.log-message {
+    flex: 1;
+    color: #e0e0e0;
+}
+
+.log-info { background: rgba(33, 150, 243, 0.2); }
+.log-success { background: rgba(76, 175, 80, 0.2); }
+.log-critical { background: rgba(211, 47, 47, 0.3); }
+.log-high { background: rgba(245, 124, 0, 0.3); }
+.log-medium { background: rgba(251, 192, 45, 0.2); }
+.log-error { background: rgba(244, 67, 54, 0.3); }
+
+/* Legend */
+.legend {
+    background: #f5f5f5;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.legend h3 {
+    font-size: 1.2em;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+}
+
+.node-sample {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #333;
+}
+
+/* Scrollbar */
+.log-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.log-container::-webkit-scrollbar-track {
+    background: #2d2d2d;
+    border-radius: 4px;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 4px;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        flex-direction: row;
+    }
+}
+
+@media (max-width: 768px) {
+    .input-row {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        flex-direction: column;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+==================================================
 File: app\static\css\style.css
 ==================================================
 body {
@@ -18981,6 +20382,245 @@ tr:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
 }
+
+==================================================
+File: app\static\css\url_tree.css
+==================================================
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    padding: 30px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+header h1 {
+    font-size: 2.5em;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+header p {
+    color: #666;
+    font-size: 1.1em;
+}
+
+.control-panel {
+    background: #f5f5f5;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.input-group input {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    transition: border-color 0.3s;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #fff;
+    color: #667eea;
+    border: 2px solid #667eea;
+}
+
+.btn-secondary:hover {
+    background: #667eea;
+    color: white;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.stats-container {
+    margin: 20px 0;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 25px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stat-card h3 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+.stat-card p {
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+.legend {
+    background: #f9f9f9;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.legend h3 {
+    font-size: 1.2em;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.color-box {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 2px solid #333;
+}
+
+.tree-container {
+    overflow: auto;
+    background: #fafafa;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+}
+
+.node circle {
+    cursor: pointer;
+}
+
+.node text {
+    font: 12px sans-serif;
+    font-weight: 500;
+}
+
+.link {
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 2px;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+
+    header h1 {
+        font-size: 1.8em;
+    }
+
+    .input-group {
+        flex-direction: column;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 
 ==================================================
 File: app\static\js\dashboard.js
@@ -19937,6 +21577,573 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ [DEBUG] Deep Fingerprinting Module Loaded');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 });
+
+
+==================================================
+File: app\static\js\live_scan.js
+==================================================
+// WebSocket 연결
+const socket = io();
+
+// 전역 상태
+let scanState = {
+    isScanning: false,
+    currentStage: '',
+    progress: {},
+    logs: [],
+    discoveries: {
+        urls: 0,
+        technologies: 0,
+        vulnerabilities: 0
+    },
+    graphData: {nodes: [], links: []}
+};
+
+// D3.js Force Graph 변수
+let svg, simulation, linkElements, nodeElements, textElements;
+
+// 페이지 로드시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initForceGraph();
+    setupSocketListeners();
+});
+
+// Force-Directed Graph 초기화
+function initForceGraph() {
+    const container = d3.select('#graphContainer');
+    const width = container.node().getBoundingClientRect().width;
+    const height = 600;
+
+    svg = container.append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    // 줌 기능
+    const g = svg.append('g');
+    svg.call(d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+        }));
+
+    // Force Simulation
+    simulation = d3.forceSimulation()
+        .force('link', d3.forceLink().id(d => d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(30));
+
+    linkElements = g.append('g').selectAll('line');
+    nodeElements = g.append('g').selectAll('circle');
+    textElements = g.append('g').selectAll('text');
+}
+
+// WebSocket 이벤트 리스너
+function setupSocketListeners() {
+    // 스캔 시작
+    socket.on('scan_started', (data) => {
+        console.log('[SCAN] Started:', data);
+        scanState.isScanning = true;
+        updateUI();
+    });
+
+    // 스캔 진행
+    socket.on('scan_progress', (data) => {
+        console.log('[PROGRESS]', data);
+        scanState.currentStage = data.stage;
+        scanState.progress[data.stage] = data.progress;
+        updateProgressBars(data);
+    });
+
+    // URL 발견
+    socket.on('url_discovered', (data) => {
+        console.log('[URL]', data.url);
+        scanState.discoveries.urls++;
+        addLogEntry('🔍', `Found: ${data.url}`, 'info');
+        addNodeToGraph(data.url, 'url', data.status_code);
+    });
+
+    // 기술 탐지
+    socket.on('technology_detected', (data) => {
+        console.log('[TECH]', data);
+        scanState.discoveries.technologies++;
+        addLogEntry('💻', `Detected: ${data.name} ${data.version || ''}`, 'success');
+        addNodeToGraph(data.name, 'technology', null, data.version);
+    });
+
+    // 취약점 발견
+    socket.on('vulnerability_found', (data) => {
+        console.log('[CVE]', data);
+        scanState.discoveries.vulnerabilities++;
+        const severity = data.cvss >= 9 ? 'critical' : data.cvss >= 7 ? 'high' : 'medium';
+        addLogEntry('🚨', `CVE: ${data.cve_id} (${data.cvss})`, severity);
+        addNodeToGraph(data.cve_id, 'vulnerability', data.cvss);
+    });
+
+    // 스캔 완료
+    socket.on('scan_completed', (data) => {
+        console.log('[SCAN] Completed:', data);
+        scanState.isScanning = false;
+        addLogEntry('✅', 'Scan completed!', 'success');
+        updateUI();
+    });
+
+    // 에러
+    socket.on('scan_error', (data) => {
+        console.error('[ERROR]', data);
+        addLogEntry('❌', `Error: ${data.message}`, 'error');
+    });
+}
+
+// 스캔 시작
+async function startScan() {
+    const target = document.getElementById('targetUrl').value;
+    if (!target) {
+        alert('Please enter a target URL');
+        return;
+    }
+
+    // 초기화
+    scanState = {
+        isScanning: true,
+        currentStage: 'initializing',
+        progress: {},
+        logs: [],
+        discoveries: {urls: 0, technologies: 0, vulnerabilities: 0},
+        graphData: {nodes: [], links: []}
+    };
+
+    document.getElementById('logContainer').innerHTML = '';
+    updateUI();
+
+    // 서버에 스캔 요청
+    socket.emit('start_scan', {
+        target: target,
+        aggressive: document.getElementById('aggressiveMode').checked
+    });
+}
+
+// 진행률 바 업데이트
+function updateProgressBars(data) {
+    const stageMap = {
+        'nmap': 'Nmap Scan',
+        'crawling': 'Web Crawling',
+        'fingerprinting': 'Fingerprinting',
+        'vulnerability': 'CVE Matching',
+        'exploitation': 'Exploit Testing'
+    };
+
+    const stageName = stageMap[data.stage] || data.stage;
+    const barId = `progress-${data.stage}`;
+
+    let bar = document.getElementById(barId);
+    if (!bar) {
+        const container = document.getElementById('progressBars');
+        container.innerHTML += `
+            <div class="progress-item">
+                <div class="progress-label">${stageName}</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="${barId}" style="width: 0%"></div>
+                    <span class="progress-text" id="${barId}-text">0%</span>
+                </div>
+            </div>
+        `;
+        bar = document.getElementById(barId);
+    }
+
+    bar.style.width = `${data.progress}%`;
+    document.getElementById(`${barId}-text`).textContent = `${data.progress}%`;
+
+    if (data.current_item) {
+        document.getElementById('currentActivity').textContent = `${stageName}: ${data.current_item}`;
+    }
+}
+
+// 로그 추가
+function addLogEntry(icon, message, type) {
+    const log = document.createElement('div');
+    log.className = `log-entry log-${type}`;
+    log.innerHTML = `<span class="log-icon">${icon}</span><span class="log-message">${message}</span>`;
+
+    const container = document.getElementById('logContainer');
+    container.insertBefore(log, container.firstChild);
+
+    // 최대 100개 유지
+    if (container.children.length > 100) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+// 그래프에 노드 추가
+function addNodeToGraph(id, type, value, label) {
+    // 중복 체크
+    if (scanState.graphData.nodes.find(n => n.id === id)) return;
+
+    const node = {
+        id: id,
+        type: type,
+        value: value || 1,
+        label: label || id
+    };
+
+    scanState.graphData.nodes.push(node);
+
+    // 루트 노드와 연결
+    if (scanState.graphData.nodes.length > 1) {
+        scanState.graphData.links.push({
+            source: scanState.graphData.nodes[0].id,
+            target: id
+        });
+    }
+
+    updateForceGraph();
+}
+
+// Force Graph 업데이트
+function updateForceGraph() {
+    const nodes = scanState.graphData.nodes;
+    const links = scanState.graphData.links;
+
+    // 링크 업데이트
+    linkElements = linkElements.data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+    linkElements.exit().remove();
+    const linkEnter = linkElements.enter().append('line')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 2);
+    linkElements = linkEnter.merge(linkElements);
+
+    // 노드 업데이트
+    nodeElements = nodeElements.data(nodes, d => d.id);
+    nodeElements.exit().remove();
+    const nodeEnter = nodeElements.enter().append('circle')
+        .attr('r', d => getNodeRadius(d))
+        .attr('fill', d => getNodeColor(d))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .call(d3.drag()
+            .on('start', dragStarted)
+            .on('drag', dragged)
+            .on('end', dragEnded));
+    nodeElements = nodeEnter.merge(nodeElements);
+
+    // 텍스트 업데이트
+    textElements = textElements.data(nodes, d => d.id);
+    textElements.exit().remove();
+    const textEnter = textElements.enter().append('text')
+        .text(d => d.id.substring(0, 20))
+        .attr('font-size', 10)
+        .attr('dx', 15)
+        .attr('dy', 4);
+    textElements = textEnter.merge(textElements);
+
+    // Simulation 재시작
+    simulation.nodes(nodes).on('tick', ticked);
+    simulation.force('link').links(links);
+    simulation.alpha(1).restart();
+}
+
+function ticked() {
+    linkElements
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+
+    nodeElements
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y);
+
+    textElements
+        .attr('x', d => d.x)
+        .attr('y', d => d.y);
+}
+
+function getNodeRadius(d) {
+    if (d.type === 'vulnerability') return 8 + (d.value || 0);
+    if (d.type === 'technology') return 12;
+    return 6;
+}
+
+function getNodeColor(d) {
+    if (d.type === 'vulnerability') {
+        if (d.value >= 9) return '#d32f2f';
+        if (d.value >= 7) return '#f57c00';
+        if (d.value >= 4) return '#fbc02d';
+        return '#388e3c';
+    }
+    if (d.type === 'technology') return '#1976d2';
+    if (d.type === 'url') return '#00796b';
+    return '#9e9e9e';
+}
+
+function dragStarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+}
+
+function dragEnded(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+}
+
+// UI 업데이트
+function updateUI() {
+    document.getElementById('urlCount').textContent = scanState.discoveries.urls;
+    document.getElementById('techCount').textContent = scanState.discoveries.technologies;
+    document.getElementById('vulnCount').textContent = scanState.discoveries.vulnerabilities;
+
+    const scanBtn = document.getElementById('scanBtn');
+    scanBtn.disabled = scanState.isScanning;
+    scanBtn.textContent = scanState.isScanning ? '🔄 Scanning...' : '🚀 Start Scan';
+}
+
+
+==================================================
+File: app\static\js\url_tree.js
+==================================================
+class URLTreeVisualizer {
+    constructor(containerId) {
+        this.container = d3.select(`#${containerId}`);
+        this.margin = {top: 20, right: 120, bottom: 20, left: 120};
+        this.width = 1400 - this.margin.right - this.margin.left;
+        this.height = 800 - this.margin.top - this.margin.bottom;
+        this.duration = 750;
+        this.i = 0;
+
+        this.tree = d3.tree().size([this.height, this.width]);
+
+        this.svg = this.container.append("svg")
+            .attr("width", this.width + this.margin.right + this.margin.left)
+            .attr("height", this.height + this.margin.top + this.margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+    }
+
+    async loadData(targetUrl) {
+        try {
+            const response = await fetch('/api/url-tree', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target: targetUrl})
+            });
+            const data = await response.json();
+
+            if (data.tree) {
+                this.root = d3.hierarchy(data.tree);
+                this.root.x0 = this.height / 2;
+                this.root.y0 = 0;
+
+                this.root.children.forEach(d => this.collapse(d));
+                this.update(this.root);
+                return data;
+            }
+        } catch (error) {
+            console.error('Error loading tree data:', error);
+            throw error;
+        }
+    }
+
+    collapse(d) {
+        if (d.children) {
+            d._children = d.children;
+            d._children.forEach(child => this.collapse(child));
+            d.children = null;
+        }
+    }
+
+    update(source) {
+        const treeData = this.tree(this.root);
+        const nodes = treeData.descendants();
+        const links = treeData.descendants().slice(1);
+
+        nodes.forEach(d => { d.y = d.depth * 180; });
+
+        const node = this.svg.selectAll('g.node')
+            .data(nodes, d => d.id || (d.id = ++this.i));
+
+        const nodeEnter = node.enter().append('g')
+            .attr('class', 'node')
+            .attr('transform', d => `translate(${source.y0},${source.x0})`)
+            .on('click', (event, d) => this.click(d));
+
+        nodeEnter.append('circle')
+            .attr('r', 1e-6)
+            .style('fill', d => d._children ? '#90caf9' : '#fff')
+            .style('stroke', d => this.getNodeColor(d.data))
+            .style('stroke-width', '3px');
+
+        nodeEnter.append('text')
+            .attr('dy', '.35em')
+            .attr('x', d => d.children || d._children ? -13 : 13)
+            .attr('text-anchor', d => d.children || d._children ? 'end' : 'start')
+            .text(d => d.data.name)
+            .style('fill-opacity', 1e-6);
+
+        const nodeUpdate = nodeEnter.merge(node);
+
+        nodeUpdate.transition()
+            .duration(this.duration)
+            .attr('transform', d => `translate(${d.y},${d.x})`);
+
+        nodeUpdate.select('circle')
+            .attr('r', 6)
+            .style('fill', d => d._children ? '#90caf9' : '#fff')
+            .style('stroke', d => this.getNodeColor(d.data))
+            .attr('cursor', 'pointer');
+
+        nodeUpdate.select('text')
+            .style('fill-opacity', 1);
+
+        const nodeExit = node.exit().transition()
+            .duration(this.duration)
+            .attr('transform', d => `translate(${source.y},${source.x})`)
+            .remove();
+
+        nodeExit.select('circle')
+            .attr('r', 1e-6);
+
+        nodeExit.select('text')
+            .style('fill-opacity', 1e-6);
+
+        const link = this.svg.selectAll('path.link')
+            .data(links, d => d.id);
+
+        const linkEnter = link.enter().insert('path', 'g')
+            .attr('class', 'link')
+            .attr('d', d => {
+                const o = {x: source.x0, y: source.y0};
+                return this.diagonal(o, o);
+            });
+
+        const linkUpdate = linkEnter.merge(link);
+
+        linkUpdate.transition()
+            .duration(this.duration)
+            .attr('d', d => this.diagonal(d, d.parent));
+
+        link.exit().transition()
+            .duration(this.duration)
+            .attr('d', d => {
+                const o = {x: source.x, y: source.y};
+                return this.diagonal(o, o);
+            })
+            .remove();
+
+        nodes.forEach(d => {
+            d.x0 = d.x;
+            d.y0 = d.y;
+        });
+    }
+
+    diagonal(s, d) {
+        return `M ${s.y} ${s.x}
+                C ${(s.y + d.y) / 2} ${s.x},
+                  ${(s.y + d.y) / 2} ${d.x},
+                  ${d.y} ${d.x}`;
+    }
+
+    click(d) {
+        if (d.children) {
+            d._children = d.children;
+            d.children = null;
+        } else {
+            d.children = d._children;
+            d._children = null;
+        }
+        this.update(d);
+    }
+
+    getNodeColor(nodeData) {
+        if (nodeData.status_code) {
+            if (nodeData.status_code >= 200 && nodeData.status_code < 300) return '#4caf50';
+            if (nodeData.status_code >= 300 && nodeData.status_code < 400) return '#ff9800';
+            if (nodeData.status_code >= 400 && nodeData.status_code < 500) return '#f44336';
+            if (nodeData.status_code >= 500) return '#9c27b0';
+        }
+        return '#1976d2';
+    }
+
+    expandAll() {
+        this.root.children.forEach(d => this.expandRecursive(d));
+        this.update(this.root);
+    }
+
+    collapseAll() {
+        this.root.children.forEach(d => this.collapse(d));
+        this.update(this.root);
+    }
+
+    expandRecursive(d) {
+        if (d._children) {
+            d.children = d._children;
+            d._children = null;
+        }
+        if (d.children) {
+            d.children.forEach(child => this.expandRecursive(child));
+        }
+    }
+}
+
+let treeVisualizer;
+
+async function scanAndVisualize() {
+    const targetUrl = document.getElementById('targetUrl').value;
+    if (!targetUrl) {
+        alert('Please enter a target URL');
+        return;
+    }
+
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('treeContainer').innerHTML = '';
+    document.getElementById('statsContainer').innerHTML = '';
+
+    try {
+        treeVisualizer = new URLTreeVisualizer('treeContainer');
+        const data = await treeVisualizer.loadData(targetUrl);
+
+        document.getElementById('statsContainer').innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>${data.total_urls}</h3>
+                    <p>Total URLs</p>
+                </div>
+                <div class="stat-card">
+                    <h3>${data.tree_nodes || data.statistics?.total_nodes || 'N/A'}</h3>
+                    <p>Tree Nodes</p>
+                </div>
+                <div class="stat-card">
+                    <h3>${data.max_depth || data.statistics?.max_depth || 'N/A'}</h3>
+                    <p>Max Depth</p>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+    } catch (error) {
+        document.getElementById('loadingIndicator').style.display = 'none';
+        alert('Error loading tree: ' + error.message);
+    }
+}
+
+function expandAll() {
+    if (treeVisualizer) {
+        treeVisualizer.expandAll();
+    }
+}
+
+function collapseAll() {
+    if (treeVisualizer) {
+        treeVisualizer.collapseAll();
+    }
+}
 
 
 ==================================================
@@ -21294,6 +23501,172 @@ File: app\templates\dashboard.html
 </html>
 
 ==================================================
+File: app\templates\live_scan.html
+==================================================
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recon Insight Professional</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; }
+        .stat-box { background: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; text-align: center; }
+        .stat-val { font-size: 24px; font-weight: bold; color: #58a6ff; }
+        .log-win { height: 350px; overflow-y: auto; background: #000; padding: 15px; border: 1px solid #30363d; font-family: monospace; font-size: 12px; margin-bottom: 20px; }
+        .tech-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .tech-card { background: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 8px; cursor: pointer; transition: 0.2s; border-left: 4px solid #238636; }
+        .tech-card:hover { border-color: #58a6ff; background: #1c2128; }
+        .raw-data { background: #000; color: #00ff41; padding: 15px; border-radius: 4px; font-size: 11px; white-space: pre-wrap; font-family: 'Consolas', monospace; }
+    </style>
+</head>
+<body class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+        <h4 class="fw-bold text-white">🔍 RECON_INSIGHT <span class="text-secondary fw-light">| Professional Analysis</span></h4>
+        <div>
+            <button id="startBtn" class="btn btn-success btn-sm px-4 fw-bold">RUN RECON</button>
+            <a href="/url-tree/{{ project.id }}" class="btn btn-outline-info btn-sm ms-2">VIEW TREE</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="stat-box"><div>FOUND_URLS</div><div id="urlCount" class="stat-val">0</div></div></div>
+        <div class="col-md-4"><div class="stat-box"><div>TECH_STACK</div><div id="techCount" class="stat-val">0</div></div></div>
+        <div class="col-md-4"><div class="stat-box"><div>PROGRESS</div><div id="progText" class="stat-val">0%</div></div></div>
+    </div>
+
+    <div id="logWindow" class="log-win text-secondary">시스템 대기 중... 스캔 버튼을 누르세요.</div>
+
+    <h6 class="mb-3 text-success fw-bold">🛡️ IDENTIFIED TECHNOLOGIES <small class="text-muted">(Click to view Raw Evidence)</small></h6>
+    <div id="techGrid" class="tech-grid">
+        </div>
+
+    <div class="modal fade" id="evidenceModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark border-secondary">
+                <div class="modal-header border-secondary text-white">
+                    <h5 class="modal-title">🔬 Raw Detection Evidence</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div id="modalBody" class="modal-body raw-data"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const techGrid = document.getElementById('techGrid');
+        const logWindow = document.getElementById('logWindow');
+        const modal = new bootstrap.Modal(document.getElementById('evidenceModal'));
+
+        document.getElementById('startBtn').onclick = () => {
+            logWindow.innerHTML = "";
+            techGrid.innerHTML = "";
+            document.getElementById('startBtn').disabled = true;
+            socket.emit('start_scan', { target: "{{ project.target }}" });
+        };
+
+        socket.on('scan_progress', (data) => {
+            document.getElementById('progText').innerText = (data.progress || 0) + "%";
+            addLog(data.current_item);
+        });
+
+        socket.on('technology_detected', (data) => {
+            document.getElementById('techCount').innerText = parseInt(document.getElementById('techCount').innerText) + 1;
+            
+            const card = document.createElement('div');
+            card.className = 'tech-card';
+            card.innerHTML = `
+                <div class="small text-secondary mb-1">${data.source}</div>
+                <div class="fw-bold text-white">${data.name}</div>
+                <div class="text-info small">${data.version || 'Version Unknown'}</div>
+            `;
+            card.onclick = () => {
+                document.getElementById('modalBody').innerText = data.evidence || "No raw evidence captured.";
+                modal.show();
+            };
+            techGrid.appendChild(card);
+        });
+
+        socket.on('url_discovered', () => {
+            document.getElementById('urlCount').innerText = parseInt(document.getElementById('urlCount').innerText) + 1;
+        });
+
+        socket.on('scan_completed', () => {
+            addLog(">>> [SUCCESS] 정찰 사이클이 완료되었습니다.");
+            document.getElementById('startBtn').disabled = false;
+        });
+
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logWindow.appendChild(div);
+            logWindow.scrollTop = logWindow.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+
+==================================================
+File: app\templates\projects.html
+==================================================
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Security Scanner - Projects</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .container { max-width: 900px; }
+        .project-card { border-radius: 10px; transition: transform 0.2s; }
+        .project-card:hover { transform: translateY(-5px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="container py-5">
+    <h2 class="mb-4">🛡️ Project Management</h2>
+    
+    <div class="card p-4 mb-5 shadow-sm">
+        <h5 class="card-title">Create New Target</h5>
+        <form action="/project/new" method="POST" class="row g-3">
+            <div class="col-md-5">
+                <input type="text" name="name" class="form-control" placeholder="Project Name" required>
+            </div>
+            <div class="col-md-5">
+                <input type="text" name="target" class="form-control" placeholder="http://example.com" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Add</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-4">
+        {% for p in projects %}
+        <div class="col-12">
+            <div class="card project-card p-3 shadow-sm border-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1 text-primary">{{ p.name }}</h5>
+                        <code class="text-secondary">{{ p.target }}</code>
+                    </div>
+                    <div class="btn-group">
+                        <a href="/live-scan/{{ p.id }}" class="btn btn-success btn-sm px-3">Scan</a>
+                        <form action="/project/delete/{{ p.id }}" method="POST" onsubmit="return confirm('진짜 삭제할까요? 스캔 데이터도 모두 사라집니다.');">
+                            <button type="submit" class="btn btn-outline-danger btn-sm ms-2">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
+
+
+==================================================
 File: app\templates\socket_test.html
 ==================================================
 <!DOCTYPE html>
@@ -21369,6 +23742,82 @@ File: app\templates\socket_test.html
             // 백엔드로 스캔 시작 이벤트 전송
             socket.emit('start_scan', {target: target});
         }
+    </script>
+</body>
+</html>
+
+
+==================================================
+File: app\templates\url_tree.html
+==================================================
+<!DOCTYPE html>
+<html>
+<head>
+    <title>URL Tree Viewer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #0a0a0a; color: #fff; margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        .node circle { fill: #00ff41; stroke: #fff; stroke-width: 2px; }
+        /* 텍스트 스타일 대폭 강화 */
+        .node text { 
+            font-size: 14px; 
+            font-weight: 500;
+            fill: #ffffff !important; 
+            text-shadow: 2px 2px 4px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            pointer-events: none;
+        }
+        .link { fill: none; stroke: #444; stroke-width: 1.5px; opacity: 0.6; }
+        #canvas { width: 100vw; height: 100vh; }
+        .info-panel { position: fixed; top: 20px; left: 20px; z-index: 100; background: rgba(20, 20, 20, 0.9); padding: 15px; border-radius: 8px; border: 1px solid #00ff41; }
+    </style>
+</head>
+<body>
+    <div class="info-panel">
+        <h5 class="text-success mb-2">🌳 URL_NODE_MAP</h5>
+        <div class="small mb-3">Target: <span class="text-info">{{ project.target }}</span></div>
+        <a href="/live-scan/{{ project.id }}" class="btn btn-xs btn-outline-light py-1 w-100">BACK_TO_LOG</a>
+    </div>
+    <div id="canvas"></div>
+
+    <script>
+        const projectId = "{{ project.id }}";
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        const svg = d3.select("#canvas").append("svg")
+            .attr("width", width).attr("height", height);
+        const g = svg.append("g");
+
+        const zoom = d3.zoom().on("zoom", (e) => g.attr("transform", e.transform));
+        svg.call(zoom);
+
+        d3.json(`/api/project/${projectId}/tree-data`).then(data => {
+            const root = d3.hierarchy(data);
+            const treeLayout = d3.tree().nodeSize([40, 220]); // 가로 간격 확보
+            treeLayout(root);
+
+            svg.call(zoom.transform, d3.zoomIdentity.translate(100, height/2).scale(0.9));
+
+            g.selectAll(".link")
+                .data(root.links()).enter().append("path")
+                .attr("class", "link")
+                .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+
+            const node = g.selectAll(".node")
+                .data(root.descendants()).enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            node.append("circle").attr("r", 6);
+
+            // 텍스트를 나중에 추가하여 선보다 위에 오게 함
+            node.append("text")
+                .attr("dy", "0.35em")
+                .attr("x", d => d.children ? -12 : 12)
+                .attr("text-anchor", d => d.children ? "end" : "start")
+                .text(d => d.data.name);
+        });
     </script>
 </body>
 </html>

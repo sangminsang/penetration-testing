@@ -1,0 +1,11 @@
+Flask
+python-nmap
+requests
+packaging>=21.0
+python-owasp-zap-v2.4==0.0.22
+zaproxy==0.2.0
+python-Wappalyzer
+playwright
+lxml
+beautifulsoup4
+aiohttp
