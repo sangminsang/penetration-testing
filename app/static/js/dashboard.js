@@ -4,8 +4,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[INIT] Dashboard initializing...');
-    const scanBtn = document.getElementById('scan-btn');
-    const targetInput = document.getElementById('target-input');
+    const scanBtn = document.getElementById('scanButton');
+    const targetInput = document.getElementById('targetInput');
     
     console.log('[INIT] Scan button:', scanBtn ? '✅ Found' : '❌ NOT FOUND');
     console.log('[INIT] Target input:', targetInput ? '✅ Found' : '❌ NOT FOUND');
@@ -732,3 +732,221 @@ function showModal(content) {
 
 
 console.log('[DASHBOARD] ✅ JavaScript loaded and ready');
+
+
+// ==========================================
+// 🐛 DEBUG VERSION - Deep Fingerprinting (DOMContentLoaded)
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 [DEBUG] Deep Fingerprinting Module Loading...');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // 1. HTML 요소 확인
+    console.log('[INIT] Checking HTML elements...');
+    const scanBtn = document.getElementById('scanButton');
+    const targetInput = document.getElementById('targetInput');
+    const deepSection = document.getElementById('deep-fingerprint-section');
+    const fpTimeline = document.getElementById('fingerprint-timeline');
+
+    console.log('[INIT] scanButton:', scanBtn ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[INIT] targetInput:', targetInput ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[INIT] deep-fingerprint-section:', deepSection ? '✅ FOUND' : '❌ NOT FOUND');
+    console.log('[INIT] fingerprint-timeline:', fpTimeline ? '✅ FOUND' : '❌ NOT FOUND');
+
+    // 2. Deep Fingerprinting 함수 정의
+    window.startDeepFingerprintDebug = async function(target) {
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🚀 [DEBUG] startDeepFingerprint CALLED');
+        console.log('🎯 [DEBUG] Target:', target);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        const section = document.getElementById('deep-fingerprint-section');
+        if (!section) {
+            console.error('❌ [DEBUG] deep-fingerprint-section NOT FOUND in HTML');
+            return;
+        }
+
+        console.log('✅ [DEBUG] deep-fingerprint-section found, showing...');
+        section.style.display = 'block';
+
+        const timeline = document.getElementById('fingerprint-timeline');
+        if (!timeline) {
+            console.error('❌ [DEBUG] fingerprint-timeline NOT FOUND');
+            return;
+        }
+
+        timeline.innerHTML = '<div style="color: yellow; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 8px;">🔄 Loading Deep Fingerprint...</div>';
+        console.log('✅ [DEBUG] Timeline updated with loading message');
+
+        try {
+            console.log('📡 [DEBUG] Sending POST to /api/deep-fingerprint...');
+            console.log('📦 [DEBUG] Request body:', JSON.stringify({ target }));
+
+            const response = await fetch('/api/deep-fingerprint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target })
+            });
+
+            console.log('📥 [DEBUG] Response received:', response.status, response.statusText);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ [DEBUG] Response error:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ [DEBUG] Data parsed successfully');
+            console.log('📊 [DEBUG] Layers:', data.layers ? data.layers.length : 0);
+            console.log('📊 [DEBUG] Summary:', data.summary);
+
+            // 결과 렌더링
+            window.renderDeepFingerprintDebug(data, timeline);
+
+        } catch (error) {
+            console.error('❌ [DEBUG] Error in startDeepFingerprintDebug:', error);
+            timeline.innerHTML = `<div style="color: red; padding: 20px; background: rgba(255,0,0,0.1); border-radius: 8px;">
+                ❌ Error: ${error.message}<br><br>
+                Check server terminal for backend errors.
+            </div>`;
+        }
+    };
+
+    // 3. 렌더링 함수
+    window.renderDeepFingerprintDebug = function(data, timeline) {
+        console.log('🎨 [DEBUG] Rendering Deep Fingerprint results...');
+
+        let html = '<div style="color: lime; padding: 20px; background: rgba(0,255,0,0.1); border-radius: 8px; margin-bottom: 20px;">';
+        html += '✅ Deep Fingerprint Scan Completed!<br>';
+        html += `📊 Total Layers: ${data.layers ? data.layers.length : 0}<br>`;
+        html += `🎯 Total Technologies: ${data.summary ? data.summary.total_technologies : 0}<br>`;
+        html += `⏱️ Duration: ${data.summary ? data.summary.total_duration : 0}s`;
+        html += '</div>';
+
+        if (data.layers && data.layers.length > 0) {
+            console.log(`🎨 [DEBUG] Rendering ${data.layers.length} layers...`);
+
+            data.layers.forEach((layer, index) => {
+                console.log(`  Layer ${layer.id}: ${layer.name} - ${layer.count} technologies`);
+
+                html += '<div style="background: rgba(0,212,255,0.1); border-left: 4px solid #00d4ff; padding: 15px; margin-bottom: 15px; border-radius: 8px;">';
+                html += `<h3 style="color: #00d4ff; margin: 0 0 10px 0;">Layer ${layer.id}: ${layer.name}</h3>`;
+                html += `<div style="color: #aaa; margin-bottom: 10px;">${layer.description}</div>`;
+                html += `<div style="color: #00ff88;">Status: ${layer.status} | Duration: ${layer.duration}s | Technologies: ${layer.count}</div>`;
+
+                if (layer.technologies && layer.technologies.length > 0) {
+                    html += '<div style="margin-top: 10px;">';
+                    layer.technologies.forEach(tech => {
+                        html += `<span style="display: inline-block; background: rgba(0,212,255,0.2); border: 1px solid #00d4ff; padding: 5px 10px; margin: 5px; border-radius: 5px;">`;
+                        html += `${tech.name}${tech.version ? ' v' + tech.version : ''}${tech.verified ? ' ✓' : ''}`;
+                        html += `</span>`;
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            });
+        } else {
+            console.warn('⚠️ [DEBUG] No layers found in response');
+        }
+
+        timeline.innerHTML = html;
+        console.log('✅ [DEBUG] Rendering completed');
+    };
+
+    // 4. 기존 startScan 확인 및 교체
+    console.log('🔍 [DEBUG] Checking existing startScan function...');
+    console.log('   - typeof window.startScan:', typeof window.startScan);
+
+    if (typeof window.startScan === 'function') {
+        console.log('✅ [DEBUG] startScan function exists!');
+
+        // 기존 함수 백업
+        const originalStartScan = window.startScan;
+        console.log('✅ [DEBUG] Original startScan backed up');
+
+        // 새 함수로 교체
+        window.startScan = async function() {
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('🎯 [DEBUG] NEW startScan CALLED');
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+            // 올바른 ID 사용
+            const targetInput = document.getElementById('targetInput');
+            if (!targetInput) {
+                console.error('❌ [DEBUG] targetInput not found');
+                return;
+            }
+
+            const targetUrl = targetInput.value.trim();
+            console.log('🎯 [DEBUG] Target URL:', targetUrl);
+
+            if (!targetUrl) {
+                console.error('❌ [DEBUG] Target URL is empty');
+                alert('Please enter a target URL');
+                return;
+            }
+
+            const scanButton = document.getElementById('scanButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+
+            if (scanButton) {
+                scanButton.disabled = true;
+                console.log('✅ [DEBUG] Scan button disabled');
+            }
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'flex';
+                console.log('✅ [DEBUG] Loading indicator shown');
+            }
+
+            try {
+                // Deep Fingerprinting 실행
+                console.log('🚀 [DEBUG] Starting Deep Fingerprint...');
+                try {
+                    await window.startDeepFingerprintDebug(targetUrl);
+                    console.log('✅ [DEBUG] Deep Fingerprint completed');
+                } catch (error) {
+                    console.error('❌ [DEBUG] Deep Fingerprint failed:', error);
+                }
+
+                // 원래 스캔 실행
+                console.log('🚀 [DEBUG] Starting original scan...');
+                try {
+                    await originalStartScan.call(this);
+                    console.log('✅ [DEBUG] Original scan completed');
+                } catch (error) {
+                    console.error('❌ [DEBUG] Original scan failed:', error);
+                }
+
+            } catch (error) {
+                console.error('❌ [DEBUG] Scan error:', error);
+            } finally {
+                if (scanButton) {
+                    scanButton.disabled = false;
+                    console.log('✅ [DEBUG] Scan button enabled');
+                }
+                if (loadingIndicator) {
+                    loadingIndicator.style.display = 'none';
+                    console.log('✅ [DEBUG] Loading indicator hidden');
+                }
+            }
+        };
+
+        console.log('✅ [DEBUG] startScan function REPLACED');
+
+    } else {
+        console.error('❌ [DEBUG] startScan function NOT FOUND!');
+        console.log('🔍 [DEBUG] Available window functions:', 
+            Object.keys(window)
+                .filter(k => typeof window[k] === 'function')
+                .filter(k => k.toLowerCase().includes('scan') || k.toLowerCase().includes('start'))
+                .slice(0, 20));
+    }
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ [DEBUG] Deep Fingerprinting Module Loaded');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+});

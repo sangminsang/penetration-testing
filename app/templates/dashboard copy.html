@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Scan Dashboard</title>
+    <!-- Socket.IO Library 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #e0e0e0; line-height: 1.6; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        header { text-align: center; padding: 40px 0 20px; border-bottom: 2px solid #0f3460; margin-bottom: 30px; }
+        h1 { font-size: 2.5em; color: #00d4ff; text-shadow: 0 0 10px rgba(0, 212, 255, 0.5); margin-bottom: 10px; }
+        .scan-section { margin-bottom: 30px; background: rgba(15, 52, 96, 0.5); border: 1px solid #0f3460; border-radius: 8px; padding: 20px; backdrop-filter: blur(10px); }
+        .scan-controls { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        input[type="text"], input[type="url"] { flex: 1; min-width: 300px; padding: 12px 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid #0f3460; border-radius: 6px; color: #e0e0e0; font-size: 14px; }
+        input[type="text"]:focus, input[type="url"]:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
+        button { padding: 12px 30px; background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%); border: none; border-radius: 6px; color: #000; font-weight: bold; cursor: pointer; transition: all 0.3s ease; font-size: 14px; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 212, 255, 0.3); }
+        button:disabled { background: #666; cursor: not-allowed; opacity: 0.6; }
+        .loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 20px; color: #00d4ff; }
+        .spinner { border: 3px solid rgba(0, 212, 255, 0.2); border-top: 3px solid #00d4ff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* [NEW] 실시간 로그 박스 스타일 */
+        #live-log-container { display: none; margin-top: 20px; background: rgba(0, 0, 0, 0.8); border: 1px solid #0f3460; border-radius: 8px; padding: 15px; }
+        #live-scan-log { height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; color: #00ff88; }
+        .log-info { color: #00d4ff; }
+        .log-success { color: #00ff88; font-weight: bold; }
+        .log-error { color: #ff4444; }
+
+        .section-title { font-size: 1.5em; color: #00d4ff; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #0f3460; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; border-radius: 6px; padding: 15px; text-align: center; }
+        .stat-label { font-size: 0.9em; color: #aaa; margin-bottom: 8px; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #00d4ff; }
+        .severity-high { color: #ff4444; }
+        .severity-medium { color: #ffaa00; }
+        .severity-low { color: #00ff88; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        thead { background: rgba(0, 212, 255, 0.15); }
+        th { padding: 12px; text-align: left; color: #00d4ff; font-weight: bold; border-bottom: 2px solid #0f3460; }
+        td { padding: 12px; border-bottom: 1px solid rgba(0, 212, 255, 0.1); }
+        tr:hover { background: rgba(0, 212, 255, 0.05); }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: bold; margin-right: 5px; }
+        .badge-high { background: rgba(255, 68, 68, 0.3); color: #ff4444; border: 1px solid #ff4444; }
+        .badge-medium { background: rgba(255, 170, 0, 0.3); color: #ffaa00; border: 1px solid #ffaa00; }
+        .badge-low { background: rgba(0, 255, 136, 0.3); color: #00ff88; border: 1px solid #00ff88; }
+        .badge-info { background: rgba(0, 212, 255, 0.3); color: #00d4ff; border: 1px solid #00d4ff; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #0f3460; flex-wrap: wrap; }
+        .tab-button { padding: 10px 20px; background: transparent; border: none; border-bottom: 3px solid transparent; color: #aaa; cursor: pointer; font-weight: bold; transition: all 0.3s ease; }
+        .tab-button.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .cve-item { background: rgba(0, 0, 0, 0.3); border-left: 4px solid #00d4ff; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .cve-id { font-weight: bold; color: #00d4ff; font-family: monospace; }
+        .cve-description { margin-top: 8px; color: #bbb; font-size: 0.95em; }
+        .alert-item { background: rgba(0, 0, 0, 0.3); border-left: 4px solid #ffaa00; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .alert-item.high { border-left-color: #ff4444; }
+        .alert-item.low { border-left-color: #00ff88; }
+        .tech-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .tech-card { background: rgba(0, 212, 255, 0.1); border: 1px solid #00d4ff; border-radius: 6px; padding: 15px; }
+        .tech-name { font-weight: bold; color: #00d4ff; margin-bottom: 8px; }
+        .tech-version { color: #aaa; font-size: 0.9em; margin-bottom: 5px; }
+        .tech-source { font-size: 0.85em; color: #888; }
+        .scenario-box { background: rgba(0, 0, 0, 0.5); border: 1px solid #0f3460; border-radius: 6px; padding: 20px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; font-size: 0.95em; color: #00ff88; max-height: 500px; overflow-y: auto; }
+        .error-message { background: rgba(255, 68, 68, 0.2); border: 1px solid #ff4444; border-radius: 6px; padding: 15px; color: #ff8888; margin-bottom: 20px; }
+        .success-message { background: rgba(0, 255, 136, 0.2); border: 1px solid #00ff88; border-radius: 6px; padding: 15px; color: #00ff88; margin-bottom: 20px; }
+        .empty-state { text-align: center; padding: 40px; color: #aaa; }
+        .footer { text-align: center; padding: 20px; color: #666; border-top: 2px solid #0f3460; margin-top: 40px; }
+        .severity-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .severity-indicator.high { background: #ff4444; }
+        .severity-indicator.medium { background: #ffaa00; }
+        .severity-indicator.low { background: #00ff88; }
+        .scroll-table { overflow-x: auto; }
+        .json-viewer { background: rgba(0, 0, 0, 0.5); border: 1px solid #0f3460; border-radius: 6px; padding: 15px; font-family: 'Courier New', monospace; font-size: 0.9em; color: #00d4ff; max-height: 400px; overflow-y: auto; }
+        .filter-buttons { margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .filter-btn { padding: 8px 16px; background: rgba(0, 212, 255, 0.3); color: #00d4ff; border: 1px solid #00d4ff; border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
+        .filter-btn.active { background: #00d4ff; color: #000; }
+        .filter-btn:hover { background: rgba(0, 212, 255, 0.5); }
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8em; }
+            .scan-controls { flex-direction: column; }
+            input[type="text"], input[type="url"] { min-width: auto; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .tech-list { grid-template-columns: 1fr; }
+            .tabs { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ Security Scan Dashboard</h1>
+            <p>Comprehensive vulnerability assessment and analysis</p>
+        </header>
+
+        <!-- Scan Controls -->
+        <div class="scan-section">
+            <div class="scan-controls">
+                <input type="url" id="targetInput" placeholder="Enter target URL (e.g., http://127.0.0.1:3000)" value="http://127.0.0.1:3000">
+                <button id="scanButton" onclick="startScan()">🚀 Start Scan</button>
+            </div>
+            
+            <div id="loadingIndicator" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <span>Scanning in progress... This may take several minutes</span>
+            </div>
+            
+            <!-- [NEW] 실시간 로그 박스 -->
+            <div id="live-log-container">
+                <div style="margin-bottom: 5px; color: #aaa; font-size: 0.8em; border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    ⚡ LIVE SCAN LOGS
+                </div>
+                <div id="live-scan-log"></div>
+            </div>
+
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+            <div id="successMessage" class="success-message" style="display: none;"></div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="scan-section" id="statsSection" style="display: none;">
+            <h2 class="section-title">Scan Summary</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Technologies Detected</div>
+                    <div class="stat-value" id="techCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">CVEs Found</div>
+                    <div class="stat-value" id="cveCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">ZAP Alerts</div>
+                    <div class="stat-value" id="zapCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Vulnerabilities Verified</div>
+                    <div class="stat-value" id="verifyCount">0</div>
+                </div>
+            </div>
+
+            <!-- Alert Breakdown -->
+            <div style="margin-top: 20px;">
+                <h3 style="color: #00d4ff; margin-bottom: 10px;">Alert Severity Breakdown</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">High Risk</div>
+                        <div class="stat-value severity-high" id="highCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Medium Risk</div>
+                        <div class="stat-value severity-medium" id="mediumCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Low Risk</div>
+                        <div class="stat-value severity-low" id="lowCount">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Tabs -->
+        <div class="scan-section" id="resultsSection" style="display: none;">
+            <div class="tabs">
+                <button class="tab-button active" onclick="switchTab(event, 'technologies')">Technologies</button>
+                <button class="tab-button" onclick="switchTab(event, 'cves')">CVEs</button>
+                <button class="tab-button" onclick="switchTab(event, 'zap-alerts')">ZAP Alerts</button>
+                <button class="tab-button" onclick="switchTab(event, 'verification')">Verification</button>
+                <button class="tab-button" onclick="switchTab(event, 'scenario')">AI Scenario</button>
+                <button class="tab-button" onclick="switchTab(event, 'raw-data')">Raw Data</button>
+            </div>
+
+            <!-- Technologies Tab -->
+            <div id="technologies" class="tab-content active">
+                <h2 class="section-title">Detected Technologies</h2>
+                <div id="techContainer" class="tech-list"></div>
+            </div>
+
+            <!-- CVEs Tab -->
+            <div id="cves" class="tab-content">
+                <h2 class="section-title">CVE Vulnerabilities</h2>
+                <div class="scroll-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>CVE ID</th>
+                                <th>CVSS</th>
+                                <th>Description</th>
+                                <th>Product</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cveTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ZAP Alerts Tab -->
+            <div id="zap-alerts" class="tab-content">
+                <h2 class="section-title">OWASP ZAP Security Alerts</h2>
+                <!-- Filter Buttons -->
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterZapAlerts(event, 'all')">All</button>
+                    <button class="filter-btn" onclick="filterZapAlerts(event, 'High')">High</button>
+                    <button class="filter-btn" onclick="filterZapAlerts(event, 'Medium')">Medium</button>
+                    <button class="filter-btn" onclick="filterZapAlerts(event, 'Low')">Low</button>
+                </div>
+                <div id="zapContainer"></div>
+            </div>
+
+            <!-- Verification Tab -->
+            <div id="verification" class="tab-content">
+                <h2 class="section-title">Vulnerability Verification Results</h2>
+                <div class="scroll-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>CVE ID</th>
+                                <th>Endpoint</th>
+                                <th>Status</th>
+                                <th>Confidence</th>
+                                <th>Exploitable</th>
+                            </tr>
+                        </thead>
+                        <tbody id="verificationTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AI Scenario Tab -->
+            <div id="scenario" class="tab-content">
+                <h2 class="section-title">🤖 AI-Powered Attack Scenario</h2>
+                <div id="scenarioContainer" class="scenario-box"></div>
+            </div>
+
+            <!-- Raw Data Tab -->
+            <div id="raw-data" class="tab-content">
+                <h2 class="section-title">Raw API Response</h2>
+                <div id="rawDataContainer" class="json-viewer"></div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>Security Scan Dashboard | Powered by Nmap, CVE Database, and OWASP ZAP</p>
+        </footer>
+    </div>
+
+    <!-- 메인 로직은 dashboard.js에 위임하되, 전역 변수 설정 -->
+    <script>
+        let currentScanData = null;
+        let allZapAlerts = [];
+        let currentZapFilter = 'all';
+    </script>
+    
+    <!-- 기존 JS 파일 로드 -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
