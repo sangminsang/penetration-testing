@@ -1,0 +1,306 @@
+console.log('✅ LIVE SCAN JS LOADED (Version 1) - 실행됨');
+(() => {
+    // 1. 소켓 안전 연결 (디버깅 로그 추가)
+    console.log('[DEBUG] live_scan.js loaded');
+    
+    if (!window.socket) {
+        console.log('[DEBUG] Creating new socket connection...');
+        window.socket = io();
+    } else {
+        console.log('[DEBUG] Reusing existing socket connection');
+    }
+    const liveSocket = window.socket;
+
+    // URL에서 Project ID 추출 (끝에 /가 붙는 경우 방어)
+    const pathParts = window.location.pathname.split('/');
+    let pid = pathParts.pop();
+    if (!pid) pid = pathParts.pop(); // 뒤에 /가 있어서 빈 문자열이 나오면 한 번 더 pop
+    const projectId = pid;
+    
+    console.log(`[DEBUG] Project ID extracted: ${projectId}`);
+
+    let scanActive = false;
+    let foundTechnologies = {}; 
+
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[DEBUG] DOMContentLoaded event fired');
+        
+        const startBtn = document.getElementById('start-scan-btn');
+        if (startBtn) {
+            console.log('[DEBUG] Start button found in DOM');
+            startBtn.addEventListener('click', startScan);
+        } else {
+            console.error('[ERROR] Start button (start-scan-btn) NOT FOUND in DOM!');
+        }
+
+        // 소켓 연결 확인
+        liveSocket.on('connect', () => {
+            console.log('[DEBUG] Socket connected successfully ID:', liveSocket.id);
+        });
+    });
+
+    function startScan() {
+        console.log('[DEBUG] Start Scan button CLICKED!');
+        
+        if (scanActive) {
+            console.log('[DEBUG] Scan is already active, ignoring click.');
+            return;
+        }
+        
+        const targetUrlElem = document.getElementById('target-url');
+        if (!targetUrlElem) {
+            console.error('[ERROR] Target URL element (#target-url) missing!');
+            alert('Error: Target URL not found on page.');
+            return;
+        }
+
+        const targetUrl = targetUrlElem.textContent.trim();
+        console.log(`[DEBUG] Target URL: ${targetUrl}`);
+        
+        if (!targetUrl) {
+            alert('Target URL is empty!');
+            return;
+        }
+
+        // UI 업데이트
+        scanActive = true;
+        const startBtn = document.getElementById('start-scan-btn');
+        if(startBtn) startBtn.disabled = true;
+        
+        const statusDiv = document.getElementById('scan-status');
+        if(statusDiv) statusDiv.innerHTML = '<span class="badge bg-warning text-dark">Scanning...</span>';
+        
+        const logTerm = document.getElementById('log-terminal');
+        if(logTerm) logTerm.innerHTML = '<div class="text-info">Requesting scan start...</div>';
+        
+        const grid = document.getElementById('tech-grid');
+        if(grid) grid.innerHTML = '';
+        
+        foundTechnologies = {};
+
+        // 서버로 전송
+        console.log('[DEBUG] Emitting start_scan event to server...');
+        liveSocket.emit('start_scan', { target: targetUrl, project_id: projectId });
+    }
+
+    // --- 소켓 이벤트 핸들러 ---
+
+    liveSocket.on('scan_progress', (data) => {
+        console.log('[DEBUG] Received scan_progress:', data);
+        const term = document.getElementById('log-terminal');
+        if (!term) return;
+        
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        
+        let colorClass = 'text-light';
+        if (data.stage === 'error') colorClass = 'text-danger';
+        if (data.stage === 'success') colorClass = 'text-success';
+        if (data.stage === 'recon') colorClass = 'text-info';
+        
+        line.innerHTML = `<span class="text-muted">[${new Date().toLocaleTimeString()}]</span> <span class="${colorClass}">${data.current_item}</span>`;
+        term.appendChild(line);
+        term.scrollTop = term.scrollHeight;
+
+        const progBar = document.getElementById('scan-progress-bar');
+        if (progBar) {
+            progBar.style.width = data.progress + '%';
+            progBar.setAttribute('aria-valuenow', data.progress);
+        }
+    });
+
+    liveSocket.on('technology_detected', (tech) => {
+        console.log('[DEBUG] Tech detected:', tech.name);
+        const techKey = tech.name.toLowerCase();
+        foundTechnologies[techKey] = tech;
+        renderTechCard(tech);
+    });
+
+    function renderTechCard(tech) {
+        const grid = document.getElementById('tech-grid');
+        if (!grid) return;
+        
+        let card = document.getElementById(`tech-card-${tech.name}`);
+        
+        if (!card) {
+            const col = document.createElement('div');
+            col.className = 'col-md-3 mb-3';
+            col.innerHTML = `
+                <div class="card h-100 shadow-sm tech-card" id="tech-card-${tech.name}" onclick="window.showTechDetail('${tech.name}')" style="cursor: pointer; transition: transform 0.2s;">
+                    <div class="card-body text-center">
+                        <h5 class="card-title fw-bold text-primary">${tech.name}</h5>
+                        <p class="card-text text-muted small">${tech.version || 'Version Detected'}</p>
+                        <span class="badge bg-secondary">${tech.source || 'Detected'}</span>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(col);
+        }
+    }
+
+    liveSocket.on('scan_completed', () => {
+        console.log('[DEBUG] Scan completed received');
+        const statusDiv = document.getElementById('scan-status');
+        if(statusDiv) statusDiv.innerHTML = '<span class="badge bg-success">Completed</span>';
+        
+        const startBtn = document.getElementById('start-scan-btn');
+        if(startBtn) startBtn.disabled = false;
+        scanActive = false;
+    });
+
+    // 전문가 모달 (window 객체에 할당)
+    window.showTechDetail = function(techName) {
+        console.log('[DEBUG] Opening detail for:', techName);
+        const tech = foundTechnologies[techName.toLowerCase()];
+        if (!tech) return;
+
+        const modalEl = document.getElementById('techModal');
+        if (!modalEl) {
+            console.error('[ERROR] Modal element #techModal NOT FOUND');
+            return;
+        }
+
+        const modalTitle = document.getElementById('techModalLabel');
+        const modalBody = modalEl.querySelector('.modal-body');
+        
+        modalTitle.innerHTML = `🛡️ ${tech.name} <span class="badge bg-primary ms-2">${tech.version || 'N/A'}</span>`;
+
+        let evidenceList = tech.evidence;
+        if (typeof evidenceList === 'string') {
+            evidenceList = evidenceList.split(' | ');
+        } else if (!Array.isArray(evidenceList)) {
+            evidenceList = [evidenceList];
+        }
+
+        let hints = tech.hints || ["No specific verification hints available."];
+
+        let html = `
+            <div class="container-fluid">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <small class="text-muted text-uppercase">Confidence</small><br>
+                        <span class="fw-bold ${tech.confidence === 'High' ? 'text-success' : 'text-warning'}">
+                            ${tech.confidence || 'Medium'}
+                        </span>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted text-uppercase">Detection Sources</small><br>
+                        <span class="fw-bold">${tech.source}</span>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold text-dark mb-2">🔍 Evidence (Detection Basis)</h6>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 30%">Source Tool</th>
+                                <th>Raw Evidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+
+        evidenceList.forEach(ev => {
+            let tool = "Scanner";
+            let detail = ev;
+            const match = ev.match(/^\[(.*?)\] (.*)/);
+            if (match) {
+                tool = match[1];
+                detail = match[2];
+            }
+            html += `
+                <tr>
+                    <td class="fw-bold text-primary">${tool}</td>
+                    <td class="font-monospace small">${detail}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+
+                <h6 class="fw-bold text-dark mb-2">💻 Manual Verification Hints</h6>
+                <div class="bg-dark text-light p-3 rounded font-monospace small" style="position: relative;">
+                    <button class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2" onclick="window.copyHints()">Copy</button>
+                    <div id="hint-content">
+        `;
+
+        if (Array.isArray(hints) && hints.length > 0) {
+            hints.forEach(hint => {
+                html += `$ ${hint}<br>`;
+            });
+        } else {
+            const targetElem = document.getElementById('target-url');
+            const url = targetElem ? targetElem.textContent.trim() : 'target';
+            html += `$ curl -I ${url}<br>`;
+        }
+
+        html += `
+                    </div>
+                </div>
+                
+                <div class="mt-3 alert alert-info small">
+                    <i class="fas fa-info-circle"></i> Use the commands above in your terminal to verify this finding manually.
+                </div>
+            </div>
+        `;
+
+        modalBody.innerHTML = html;
+
+        let modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+    };
+
+    window.copyHints = function() {
+        const content = document.getElementById('hint-content');
+        if(content) {
+            navigator.clipboard.writeText(content.innerText).then(() => {
+                alert('Commands copied to clipboard!');
+            });
+        }
+    };
+})();
+
+// ==========================================
+// [추가됨] 모달 버튼 기능 활성화 (이벤트 위임)
+// ==========================================
+document.addEventListener('click', function(e) {
+    // 1. 복사 버튼 기능 구현 (Copy Button Logic)
+    // .copy-btn 또는 그 안의 아이콘을 클릭했을 때 처리
+    const copyBtn = e.target.closest('.copy-btn');
+    if (copyBtn) {
+        const textToCopy = copyBtn.getAttribute('data-clipboard-text');
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // 복사 성공 시 아이콘 변경 (체크 표시)
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                
+                // 1.5초 뒤 원래대로 복구
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalHtml;
+                }, 1500);
+            }).catch(err => {
+                console.error('복사 실패:', err);
+                alert('복사에 실패했습니다.');
+            });
+        }
+    }
+
+    // 2. 닫기/X 버튼 강제 기능 구현 (Close Button Logic)
+    // Bootstrap의 data-bs-dismiss가 동적 요소에서 작동하지 않을 때를 대비
+    const closeBtn = e.target.closest('[data-bs-dismiss="modal"]');
+    if (closeBtn) {
+        const modalEl = document.getElementById('techModal');
+        // Bootstrap 5 인스턴스 가져오기 시도
+        if (typeof bootstrap !== 'undefined' && modalEl) {
+            const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modalInstance.hide();
+        }
+    }
+});

@@ -1,5 +1,0 @@
-__pycache__/
-*.pyc
-*.zip
-*.tar.gz
-data/cve_cache.db
