@@ -58,6 +58,7 @@ def get_run_network_scan():
     return scanner_module.run_network_scan
 
 # ========== Logger ==========
+import time
 logger = logging.getLogger(__name__)
 
 # ========== Blueprint ==========
@@ -1191,3 +1192,429 @@ def api_zap_alerts():
     except Exception as e:
         logger.exception(f"Failed to fetch ZAP alerts: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ==========================================
+# Deep Fingerprinting Trace API
+# ==========================================
+
+@bp.route('/api/deep-fingerprint', methods=['POST'])
+def api_deep_fingerprint():
+    """
+    Deep Fingerprinting Trace API
+    레이어별로 순차적으로 기술을 탐지하고 각 단계의 결과를 반환
+    """
+    data = request.get_json() or {}
+    target = data.get('target')
+
+    if not target:
+        return jsonify({'error': 'target is required'}), 400
+
+    try:
+        result = {
+            'target': target,
+            'timestamp': time.time(),
+            'layers': []
+        }
+
+        # ===================================
+        # Layer 1: HTTP Header Analysis
+        # ===================================
+        layer1_start = time.time()
+        logger.info(f"[DEEP-FP] Layer 1: HTTP Header Analysis started for {target}")
+
+        try:
+            # analyze_http_headers 함수 사용 (소문자!)
+            from ..core.recon.web import analyze_http_headers
+            header_analysis = analyze_http_headers(target)
+
+            layer1_techs = []
+            if header_analysis:
+                # Server 헤더 정보
+                if 'webserver' in header_analysis and header_analysis['webserver']:
+                    layer1_techs.append({
+                        'name': header_analysis['webserver'],
+                        'confidence': 0.7,
+                        'source': 'Server Header',
+                        'method': 'HTTP Response Header'
+                    })
+
+                # X-Powered-By 정보
+                if 'webframework' in header_analysis and header_analysis['webframework']:
+                    layer1_techs.append({
+                        'name': header_analysis['webframework'],
+                        'confidence': 0.8,
+                        'source': 'X-Powered-By Header',
+                        'method': 'HTTP Response Header'
+                    })
+
+                # Programming Language
+                if 'programminglanguage' in header_analysis and header_analysis['programminglanguage']:
+                    layer1_techs.append({
+                        'name': header_analysis['programminglanguage'],
+                        'confidence': 0.75,
+                        'source': 'X-Powered-By Analysis',
+                        'method': 'HTTP Response Header'
+                    })
+
+            layer1_duration = time.time() - layer1_start
+
+            result['layers'].append({
+                'id': 1,
+                'name': 'HTTP Header Analysis',
+                'description': 'Basic technology detection from HTTP response headers',
+                'duration': round(layer1_duration, 2),
+                'technologies': layer1_techs,
+                'count': len(layer1_techs),
+                'status': 'completed'
+            })
+
+            logger.info(f"[DEEP-FP] Layer 1 completed: {len(layer1_techs)} technologies found")
+
+        except Exception as e:
+            logger.error(f"[DEEP-FP] Layer 1 failed: {e}")
+            result['layers'].append({
+                'id': 1,
+                'name': 'HTTP Header Analysis',
+                'duration': 0,
+                'technologies': [],
+                'count': 0,
+                'status': 'failed',
+                'error': str(e)
+            })
+
+        # ===================================
+        # Layer 2: File Structure & Path Analysis
+        # ===================================
+        layer2_start = time.time()
+        logger.info(f"[DEEP-FP] Layer 2: File Structure Analysis started")
+
+        try:
+            from ..core.recon.web import discover_endpoints_with_ffuf, extract_version_from_endpoints
+
+            # 중요 경로 탐색
+            endpoints = discover_endpoints_with_ffuf(target)
+
+            # 버전 정보 추출
+            layer2_techs = extract_version_from_endpoints(target, endpoints)
+
+            # 형식 통일
+            layer2_formatted = []
+            for tech in layer2_techs:
+                layer2_formatted.append({
+                    'name': tech.get('name', 'Unknown'),
+                    'version': tech.get('version', ''),
+                    'confidence': 0.85,
+                    'source': tech.get('source', 'File Structure'),
+                    'method': 'Path Enumeration & File Analysis'
+                })
+
+            layer2_duration = time.time() - layer2_start
+
+            result['layers'].append({
+                'id': 2,
+                'name': 'File Structure & Path Analysis',
+                'description': 'Deep analysis of file paths, package.json, version endpoints',
+                'duration': round(layer2_duration, 2),
+                'technologies': layer2_formatted,
+                'endpoints_discovered': len(endpoints),
+                'count': len(layer2_formatted),
+                'status': 'completed'
+            })
+
+            logger.info(f"[DEEP-FP] Layer 2 completed: {len(layer2_formatted)} technologies found")
+
+        except Exception as e:
+            logger.error(f"[DEEP-FP] Layer 2 failed: {e}")
+            result['layers'].append({
+                'id': 2,
+                'name': 'File Structure & Path Analysis',
+                'duration': 0,
+                'technologies': [],
+                'count': 0,
+                'status': 'failed',
+                'error': str(e)
+            })
+
+        # ===================================
+        # Layer 3: Deep Verification
+        # ===================================
+        layer3_start = time.time()
+        logger.info(f"[DEEP-FP] Layer 3: Deep Verification started")
+
+        try:
+            # 모든 기술 정보 수집
+            all_techs = []
+            for layer in result['layers']:
+                if layer['status'] == 'completed':
+                    all_techs.extend(layer['technologies'])
+
+            # VulnerabilityVerifier를 사용한 검증
+            verifier = VulnerabilityVerifier(
+                target_url=target,
+                endpoints=[],
+                cves=[],
+                technologies=all_techs
+            )
+
+            # 서버 컨텍스트 탐지
+            server_context = verifier.detectServerContext()
+
+            layer3_techs = []
+
+            # 검증된 OS 정보
+            if server_context.get('os') != 'unknown':
+                layer3_techs.append({
+                    'name': server_context['os'].upper(),
+                    'category': 'Operating System',
+                    'confidence': 0.95,
+                    'source': 'Context-Aware Detection',
+                    'method': 'Multi-Source Verification',
+                    'verified': True
+                })
+
+            # 검증된 웹서버 정보
+            if server_context.get('webserver') != 'unknown':
+                layer3_techs.append({
+                    'name': server_context['webserver'].capitalize(),
+                    'category': 'Web Server',
+                    'confidence': 0.95,
+                    'source': 'Context-Aware Detection',
+                    'method': 'Multi-Source Verification',
+                    'verified': True
+                })
+
+            # 검증된 언어 정보
+            if server_context.get('language') != 'unknown':
+                layer3_techs.append({
+                    'name': server_context['language'].upper(),
+                    'category': 'Programming Language',
+                    'confidence': 0.95,
+                    'source': 'Context-Aware Detection',
+                    'method': 'Multi-Source Verification',
+                    'verified': True
+                })
+
+            layer3_duration = time.time() - layer3_start
+
+            result['layers'].append({
+                'id': 3,
+                'name': 'Deep Verification',
+                'description': 'Context-aware verification using AdvancedVerification engine',
+                'duration': round(layer3_duration, 2),
+                'technologies': layer3_techs,
+                'count': len(layer3_techs),
+                'server_context': server_context,
+                'status': 'completed'
+            })
+
+            logger.info(f"[DEEP-FP] Layer 3 completed: {len(layer3_techs)} verified technologies")
+
+        except Exception as e:
+            logger.error(f"[DEEP-FP] Layer 3 failed: {e}")
+            result['layers'].append({
+                'id': 3,
+                'name': 'Deep Verification',
+                'duration': 0,
+                'technologies': [],
+                'count': 0,
+                'status': 'failed',
+                'error': str(e)
+            })
+
+        # ===================================
+        # Summary
+        # ===================================
+        total_duration = time.time() - result['timestamp']
+        total_techs = sum(layer['count'] for layer in result['layers'] if layer['status'] == 'completed')
+
+        result['summary'] = {
+            'total_duration': round(total_duration, 2),
+            'total_technologies': total_techs,
+            'layers_completed': sum(1 for layer in result['layers'] if layer['status'] == 'completed'),
+            'layers_failed': sum(1 for layer in result['layers'] if layer['status'] == 'failed')
+        }
+
+        logger.info(f"[DEEP-FP] Scan completed: {total_techs} technologies in {total_duration:.2f}s")
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.exception(f"[DEEP-FP] Scan failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# URL Tree Mapping API - Hierarchical Structure Visualization
+# ============================================================================
+
+@bp.route('/api/url-tree', methods=['POST'])
+def url_tree():
+    """
+    URL Tree Mapping - 계층적 URL 구조 시각화
+    
+    Features:
+    1. Recursive web crawling
+    2. Smart directory discovery
+    3. Hierarchical tree building
+    4. Vulnerability mapping to nodes
+    
+    Request body:
+        {
+            "target": "http://example.com",
+            "max_depth": 3,
+            "max_urls": 500,
+            "enable_crawler": true,
+            "enable_discovery": true
+        }
+    
+    Returns:
+        {
+            "tree": {...},
+            "statistics": {...},
+            "duration": 12.34
+        }
+    """
+    try:
+        data = request.get_json()
+        target = data.get('target')
+        
+        if not target:
+            return jsonify({'error': 'Target URL required'}), 400
+        
+        logger.info(f"[URL-TREE] Starting URL tree mapping for {target}")
+        
+        # Configuration
+        max_depth = data.get('max_depth', 3)
+        max_urls = data.get('max_urls', 500)
+        enable_crawler = data.get('enable_crawler', True)
+        enable_discovery = data.get('enable_discovery', True)
+        
+        start_time = time.time()
+        
+        all_urls = []
+        
+        # ===================================
+        # Phase 1: Web Crawling
+        # ===================================
+        if enable_crawler:
+            logger.info(f"[URL-TREE] Phase 1: Crawling (depth: {max_depth}, max: {max_urls})")
+            
+            try:
+                from ..core.recon.crawler import crawl_target
+                
+                crawler_result = crawl_target(
+                    target_url=target,
+                    max_depth=max_depth,
+                    max_urls=max_urls
+                )
+                
+                all_urls.extend(crawler_result['urls'])
+                
+                logger.info(f"[URL-TREE] Crawler found {len(crawler_result['urls'])} URLs, "
+                           f"{len(crawler_result['api_endpoints'])} API endpoints")
+                
+            except Exception as e:
+                logger.error(f"[URL-TREE] Crawler failed: {e}")
+        
+        # ===================================
+        # Phase 2: Smart Discovery
+        # ===================================
+        if enable_discovery:
+            logger.info(f"[URL-TREE] Phase 2: Smart directory discovery")
+            
+            try:
+                from ..core.recon.discovery import discover_endpoints
+                
+                discovery_result = discover_endpoints(
+                    target_url=target,
+                    max_depth=max_depth,
+                    threads=10
+                )
+                
+                all_urls.extend(discovery_result['endpoints'])
+                
+                logger.info(f"[URL-TREE] Discovery found {len(discovery_result['endpoints'])} endpoints")
+                
+            except Exception as e:
+                logger.error(f"[URL-TREE] Discovery failed: {e}")
+        
+        # ===================================
+        # Phase 3: Get CVE & Tech data
+        # ===================================
+        logger.info(f"[URL-TREE] Phase 3: Fetching vulnerability and technology data")
+        
+        cves = []
+        technologies = []
+        
+        try:
+            # Deep Fingerprinting으로 기술 탐지
+            from ..core.recon.fingerprint import deep_fingerprint
+            
+            fp_result = deep_fingerprint(target)
+            
+            # 모든 레이어에서 기술 수집
+            for layer in fp_result.get('layers', []):
+                technologies.extend(layer.get('technologies', []))
+            
+            logger.info(f"[URL-TREE] Collected {len(technologies)} technologies")
+            
+        except Exception as e:
+            logger.warning(f"[URL-TREE] Could not fetch fingerprint data: {e}")
+        
+        # TODO: CVE 데이터도 가져오기 (기존 스캔 결과 활용)
+        
+        # ===================================
+        # Phase 4: Build Tree Structure
+        # ===================================
+        logger.info(f"[URL-TREE] Phase 4: Building hierarchical tree")
+        
+        try:
+            from ..core.recon.mapper import build_url_tree
+            
+            tree_result = build_url_tree(
+                urls=all_urls,
+                base_url=target,
+                cves=cves if cves else None,
+                technologies=technologies if technologies else None
+            )
+            
+            duration = time.time() - start_time
+            
+            logger.info(f"[URL-TREE] Tree built successfully in {duration:.2f}s")
+            logger.info(f"[URL-TREE] Statistics: {tree_result['statistics']}")
+            
+            # Add metadata
+            result = {
+                'success': True,
+                'target': target,
+                'tree': tree_result['tree'],
+                'statistics': tree_result['statistics'],
+                'total_urls': len(all_urls),
+                'duration': round(duration, 2),
+                'config': {
+                    'max_depth': max_depth,
+                    'max_urls': max_urls,
+                    'crawler_enabled': enable_crawler,
+                    'discovery_enabled': enable_discovery
+                }
+            }
+            
+            return jsonify(result)
+            
+        except Exception as e:
+            logger.exception(f"[URL-TREE] Tree building failed: {e}")
+            return jsonify({'error': f'Tree building failed: {str(e)}'}), 500
+        
+    except Exception as e:
+        logger.exception(f"[URL-TREE] Request failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/url-tree')
+def url_tree_page():
+    """URL Tree 시각화 페이지"""
+    return render_template('url_tree.html')
+
+@bp.route('/live-scan')
+def live_scan_page():
+    """실시간 스캔 대시보드 페이지"""
+    return render_template('live_scan.html')

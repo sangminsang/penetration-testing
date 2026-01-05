@@ -38,3 +38,4 @@ cvss>=3.1.0  # CVSS 3.1 계산 라이브러리 (선택적)
 # 비동기 HTTP 클라이언트 (NVD API 비동기 호출용)
 aiohttp>=3.9.0  # 비동기 HTTP 요청 (async_nvd_client.py에서 사용)
 
+Flask-SQLAlchemy==3.1.1

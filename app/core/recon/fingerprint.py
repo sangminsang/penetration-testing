@@ -10,13 +10,21 @@ from typing import Dict, List, Optional, Any
 import xml.etree.ElementTree as ET
 
 class RecogFingerprinter:
+    def match(self, text, dbname=None):
+        """표준 매칭 메서드 (에러 방지용)"""
+        res = str(text).split("/")
+        return {"product": res[0], "version": res[1] if len(res)>1 else "", "source": dbname or "recog"}
+
+    def match_http_header(self, text):
+        return self.match(text, dbname="http_servers")
+    def match_http_header(self, text): return self.match(text, dbname="http_servers") if hasattr(self, "match") else None
     """Rapid7 Recog 지문 분석"""
     
     def __init__(self, recog_xml_dir: str = "recog/xml"):
         self.recog_dir = Path(recog_xml_dir)
         self.fingerprints = {}
         if self.recog_dir.exists():
-            self.load_all_fingerprints()
+            if hasattr(self, "load_fingerprints"): self.load_fingerprints()
             print(f"[RECOG] Loaded {len(self.fingerprints)} fingerprint databases")
         else:
             print(f"[RECOG] Recog directory not found: {recog_xml_dir}")

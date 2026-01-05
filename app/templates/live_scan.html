@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* UI 먹통 방지: 모달을 최상위 레이어로 강제 승격 */
+    .modal-backdrop { z-index: 10050 !important; }
+    .modal { z-index: 10055 !important; }
+    .modal-dialog { z-index: 10060 !important; }
+    .modal-content { z-index: 10065 !important; }
+    /* 결과 카드가 모달 위를 덮지 못하게 설정 */
+    .tech-card { position: relative; z-index: 1; }
+</style>
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Sidebar: Control Panel & Log -->
+        <div class="col-md-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Live Scanner Control</h6>
+                    <div id="scan-status"><span class="badge bg-secondary">Ready</span></div>
+                </div>
+                <div class="card-body">
+                    <h5 class="mb-3">Target: <span id="target-url" class="text-info">{{ project.target }}</span></h5>
+                    
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div id="scan-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+
+                    <button id="start-scan-btn" class="btn btn-primary w-100 btn-lg mb-3">
+                        <i class="fas fa-radar"></i> Start Deep Recon
+                    </button>
+
+                    <div class="terminal-window bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;" id="log-terminal">
+                        <div class="text-muted">Waiting for command...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content: Stats & Grid -->
+        <div class="col-md-8">
+            <!-- Stats Row -->
+            <div class="row">
+                <!-- Open Ports -->
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-primary shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Open Ports</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-ports">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-network-wired fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tech Stack -->
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-success shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Tech Stack</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-tech">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-layer-group fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vulnerabilities -->
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-warning shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Vulnerabilities</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-vulns">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sitemap -->
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-info shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Sitemap</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-urls">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-sitemap fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tech Grid -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Detected Technologies & Vulnerabilities</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="tech-grid">
+                        <!-- Tech Cards Injected Here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Structure Map Placeholder -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Target Structure Map</h6>
+                </div>
+                <div class="card-body text-center py-5 text-muted">
+                    <i class="fas fa-sitemap fa-3x mb-3"></i><br>
+                    Structure map will be implemented in Phase 2.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Technology Detail Modal -->
+<div class="modal fade" id="techModal" tabindex="-1" aria-labelledby="techModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold" id="techModalLabel">Technology Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal content will be dynamically injected via JS -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script src="{{ url_for('static', filename='js/live_scan.js') }}?version=2"></script>
+{% endblock %}

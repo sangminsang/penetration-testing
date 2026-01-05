@@ -1,0 +1,45 @@
+/home/lsm/miniconda3/envs/sec_ai/lib/python3.11/site-packages/Wappalyzer/Wappalyzer.py:5: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+ * Restarting with watchdog (inotify)
+/home/lsm/miniconda3/envs/sec_ai/lib/python3.11/site-packages/Wappalyzer/Wappalyzer.py:5: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+ * Debugger is active!
+ * Debugger PIN: 112-431-617
+(97754) wsgi starting up on http://0.0.0.0:5000
+(97754) accepted ('127.0.0.1', 60912)
+127.0.0.1 - - [03/Jan/2026 15:49:35] "GET /socket.io/?EIO=4&transport=polling&t=Pk2dbXk HTTP/1.1" 200 300 0.000354
+127.0.0.1 - - [03/Jan/2026 15:49:35] "POST /socket.io/?EIO=4&transport=polling&t=Pk2dbsq&sid=UkV0Twt3lirj5hRLAAAA HTTP/1.1" 200 219 0.001429
+127.0.0.1 - - [03/Jan/2026 15:49:35] "GET /socket.io/?EIO=4&transport=polling&t=Pk2dbsr&sid=UkV0Twt3lirj5hRLAAAA HTTP/1.1" 200 267 0.000216
+(97754) accepted ('127.0.0.1', 60922)
+(97754) accepted ('127.0.0.1', 60932)
+(97754) accepted ('127.0.0.1', 60938)
+127.0.0.1 - - [03/Jan/2026 15:49:35] "GET /socket.io/?EIO=4&transport=polling&t=Pk2dbt7&sid=UkV0Twt3lirj5hRLAAAA HTTP/1.1" 200 181 0.276897
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /socket.io/?EIO=4&transport=websocket&sid=UkV0Twt3lirj5hRLAAAA HTTP/1.1" 200 0 1.268907
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /live-scan HTTP/1.1" 200 4694 0.012860
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /static/css/live_scan.css HTTP/1.1" 304 211 0.015002
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /static/js/live_scan.js HTTP/1.1" 304 208 0.011739
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /socket.io/?EIO=4&transport=polling&t=Pk2dcHm HTTP/1.1" 200 300 0.000592
+127.0.0.1 - - [03/Jan/2026 15:49:37] "POST /socket.io/?EIO=4&transport=polling&t=Pk2dcI4&sid=0tIRm5aZSgDJrbd7AAAC HTTP/1.1" 200 219 0.001003
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /socket.io/?EIO=4&transport=polling&t=Pk2dcI5&sid=0tIRm5aZSgDJrbd7AAAC HTTP/1.1" 200 267 0.000340
+(97754) accepted ('127.0.0.1', 60940)
+127.0.0.1 - - [03/Jan/2026 15:49:37] "GET /socket.io/?EIO=4&transport=polling&t=Pk2dcIK&sid=0tIRm5aZSgDJrbd7AAAC HTTP/1.1" 200 181 0.290835
+127.0.0.1 - - [03/Jan/2026 15:49:38] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 355 0.000828
+127.0.0.1 - - [03/Jan/2026 15:49:38] "GET /static/css/live_scan.css HTTP/1.1" 304 211 0.013576
+127.0.0.1 - - [03/Jan/2026 15:49:40] "GET /socket.io/?EIO=4&transport=websocket&sid=0tIRm5aZSgDJrbd7AAAC HTTP/1.1" 200 0 3.413709
+127.0.0.1 - - [03/Jan/2026 15:49:40] "GET /live-scan HTTP/1.1" 200 4694 0.004330
+127.0.0.1 - - [03/Jan/2026 15:49:40] "GET /static/css/live_scan.css HTTP/1.1" 200 7115 0.016905
+127.0.0.1 - - [03/Jan/2026 15:49:40] "GET /static/js/live_scan.js HTTP/1.1" 200 9935 0.017391
+127.0.0.1 - - [03/Jan/2026 15:49:40] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 355 0.001706
+127.0.0.1 - - [03/Jan/2026 15:49:41] "GET /socket.io/?EIO=4&transport=polling&t=Pk2ddIi HTTP/1.1" 200 300 0.000261
+127.0.0.1 - - [03/Jan/2026 15:49:41] "POST /socket.io/?EIO=4&transport=polling&t=Pk2ddIv&sid=BtpPFI5ydvM2zXWRAAAE HTTP/1.1" 200 219 0.000951
+127.0.0.1 - - [03/Jan/2026 15:49:41] "GET /socket.io/?EIO=4&transport=polling&t=Pk2ddIx&sid=BtpPFI5ydvM2zXWRAAAE HTTP/1.1" 200 267 0.000362
+(97754) accepted ('127.0.0.1', 60948)
+127.0.0.1 - - [03/Jan/2026 15:49:41] "GET /socket.io/?EIO=4&transport=polling&t=Pk2ddJF&sid=BtpPFI5ydvM2zXWRAAAE HTTP/1.1" 200 181 0.274928
+/home/lsm/miniconda3/envs/sec_ai/lib/python3.11/site-packages/Wappalyzer/Wappalyzer.py:226: UserWarning: Caught 'unbalanced parenthesis at position 119' compiling regex: ['(?:<div class="sf-toolbar[^>]+?>[^]+<span class="sf-toolbar-value">([\\d.])+|<div id="sfwdt[^"]+" class="[^"]*sf-toolbar)', 'version:\\1']
+  warnings.warn(
+127.0.0.1 - - [03/Jan/2026 15:50:28] "GET /socket.io/?EIO=4&transport=polling&t=Pk2doaH HTTP/1.1" 200 300 0.000245
+127.0.0.1 - - [03/Jan/2026 15:50:28] "POST /socket.io/?EIO=4&transport=polling&t=Pk2doaO&sid=-3lPKqSeAKWz89LGAAAG HTTP/1.1" 200 219 0.001300
+127.0.0.1 - - [03/Jan/2026 15:50:28] "GET /socket.io/?EIO=4&transport=polling&t=Pk2doaQ&sid=-3lPKqSeAKWz89LGAAAG HTTP/1.1" 200 267 0.000395
+(97754) accepted ('127.0.0.1', 35468)
+127.0.0.1 - - [03/Jan/2026 15:50:28] "GET /socket.io/?EIO=4&transport=polling&t=Pk2doaZ&sid=-3lPKqSeAKWz89LGAAAG HTTP/1.1" 200 181 0.296023
+127.0.0.1 - - [03/Jan/2026 15:50:29] "GET /socket.io/?EIO=4&transport=websocket&sid=BtpPFI5ydvM2zXWRAAAE HTTP/1.1" 200 0 48.163387
