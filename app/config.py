@@ -1,6 +1,5 @@
 # app/config.py
 
-
 class Config:
     # cve-search api
     CVE_SEARCH_BASE_URL = "https://localhost"
@@ -21,7 +20,9 @@ class Config:
     NVD_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
     NVD_RESULTS_PER_PAGE = 50
     REQUEST_TIMEOUT = 15
-    ZAP_API_KEY = 'change-me-9203935709'
+
+    # ZAP Docker 설정
+    ZAP_API_KEY = '12345'
     ZAP_PROXY_HOST = '127.0.0.1'
     ZAP_PROXY_PORT = 8080
     ZAP_TIMEOUT = 600  # 10분
