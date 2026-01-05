@@ -115,7 +115,7 @@ def call_ollama(prompt: str):
     }
 
     try:
-        resp = requests.post(url, json=payload, timeout=300)
+        resp = requests.post(url, json=payload, timeout=600)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         return {

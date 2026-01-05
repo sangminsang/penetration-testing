@@ -226,10 +226,7 @@ __all__ = ['ZapScanner', 'format_alerts_for_dashboard']
 **Absolute Path:** `d:\3차 프로젝트\6트\12.26 app\app\core\scanner\zap_scanner.py`
 
 ```python
-\"\"\"
-OWASP ZAP 자동 스캔 모듈
-app/core/scanner/zap_scanner.py
-\"\"\"
+# app/core/scanner/zap_scanner.py
 
 import time
 import logging
@@ -240,10 +237,10 @@ from app.config import Config
 logger = logging.getLogger(__name__)
 
 class ZapScanner:
-    \"\"\"
+    """
     OWASP ZAP API를 사용한 자동 보안 스캔 클래스
-    Spider(크롤링) → Active Scan(공격 스캔) → Alert 수집
-    \"\"\"
+    Spider(크롤링) -> Active Scan(공격 스캔) -> Alert 수집
+    """
     
     def __init__(
         self,
@@ -252,9 +249,7 @@ class ZapScanner:
         proxy_port: int = None,
         timeout: int = None
     ):
-        \"\"\"
-        ZAP 클라이언트 초기화
-        \"\"\"
+        """ZAP 클라이언트 초기화"""
         self.api_key = api_key or Config.ZAP_API_KEY
         self.proxy_host = proxy_host or Config.ZAP_PROXY_HOST
         self.proxy_port = proxy_port or Config.ZAP_PROXY_PORT
@@ -267,24 +262,24 @@ class ZapScanner:
         
         try:
             self.zap = ZAPv2(apikey=self.api_key, proxies=proxies)
-            logger.info(f\"ZAP Client initialized: {self.proxy_host}:{self.proxy_port}\")
+            logger.info(f"ZAP Client initialized: {self.proxy_host}:{self.proxy_port}")
         except Exception as e:
-            logger.error(f\"Failed to initialize ZAP client: {e}\")
+            logger.error(f"Failed to initialize ZAP client: {e}")
             raise
-    
+
     def access_target(self, target_url: str) -> bool:
         try:
-            logger.info(f\"Accessing target URL: {target_url}\")
+            logger.info(f"Accessing target URL: {target_url}")
             self.zap.core.access_url(url=target_url, followredirects=True)
             time.sleep(2)
             return True
         except Exception as e:
-            logger.error(f\"Failed to access target: {e}\")
+            logger.error(f"Failed to access target: {e}")
             return False
-            
+
     def run_spider(self, target_url: str, max_children: Optional[int] = None) -> Dict[str, Any]:
         try:
-            logger.info(f\"Starting Spider scan on: {target_url}\")
+            logger.info(f"Starting Spider scan on: {target_url}")
             if max_children is None:
                 max_children = 100
             
@@ -294,7 +289,7 @@ class ZapScanner:
                 recurse=True
             )
             
-            logger.info(f\"Spider scan started. Scan ID: {scan_id}\")
+            logger.info(f"Spider scan started. Scan ID: {scan_id}")
             
             start_time = time.time()
             timeout = 60
@@ -320,12 +315,12 @@ class ZapScanner:
                 'progress': 100
             }
         except Exception as e:
-            logger.error(f\"Spider scan failed: {e}\")
+            logger.error(f"Spider scan failed: {e}")
             return {'status': 'failed', 'error': str(e)}
 
     def run_active_scan(self, target_url: str, recurse: bool = True, scan_policy_name: str = None, context_id: str = None) -> Dict[str, Any]:
         try:
-            logger.info(f\"Starting Active Scan on: {target_url} (Recurse: {recurse})\")
+            logger.info(f"Starting Active Scan on: {target_url} (Recurse: {recurse})")
             scan_id = self.zap.ascan.scan(
                 url=target_url,
                 recurse=recurse,
@@ -335,7 +330,7 @@ class ZapScanner:
             )
             
             if not scan_id or scan_id == 'does_not_exist' or not str(scan_id).isdigit():
-                return {'status': 'failed', 'error': f\"Invalid scan ID: {scan_id}\"}
+                return {'status': 'failed', 'error': f"Invalid scan ID: {scan_id}"}
             
             start_time = time.time()
             while True:
@@ -353,7 +348,7 @@ class ZapScanner:
             
             return {'scan_id': scan_id, 'status': 'completed', 'progress': 100}
         except Exception as e:
-            logger.error(f\"Active scan failed: {e}\")
+            logger.error(f"Active scan failed: {e}")
             return {'status': 'failed', 'error': str(e)}
 
     def get_alerts(self, base_url: Optional[str] = None, risk_levels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
@@ -377,15 +372,15 @@ class ZapScanner:
                     })
             return filtered_alerts
         except Exception as e:
-            logger.error(f\"Failed to fetch alerts: {e}\")
+            logger.error(f"Failed to fetch alerts: {e}")
             return []
 
     def targeted_scan(self, target_urls: List[str]) -> Dict[str, Any]:
-        \"\"\"
+        """
         Nuclei 등에서 발견된 특정 URL만 정밀 타격 (Funnel 전략)
-        \"\"\"
+        """
         results = {'scanned_urls': [], 'alerts': []}
-        logger.info(f\"Starting TARGETED ZAP SCAN on {len(target_urls)} URLs\")
+        logger.info(f"Starting TARGETED ZAP SCAN on {len(target_urls)} URLs")
         
         for url in target_urls:
             try:
@@ -393,16 +388,16 @@ class ZapScanner:
                 scan_result = self.run_active_scan(url, recurse=False)
                 results['scanned_urls'].append({'url': url, 'status': scan_result.get('status')})
             except Exception as e:
-                logger.error(f\"Failed targeted scan for {url}: {e}\")
+                logger.error(f"Failed targeted scan for {url}: {e}")
         
         results['alerts'] = self.get_alerts(risk_levels=['High', 'Medium', 'Low'])
         return results
 
     def full_scan(self, target_url: str, run_spider: bool = True, run_active: bool = True, risk_levels: List[str] = None) -> Dict[str, Any]:
-        \"\"\"전체 스캔 워크플로우\"\"\"
+        """전체 스캔 워크플로우"""
         try:
             if not self.access_target(target_url):
-                raise Exception(\"Failed to access target URL\")
+                raise Exception("Failed to access target URL")
                 
             spider_res = {}
             if run_spider:
@@ -422,6 +417,20 @@ class ZapScanner:
             }
         except Exception as e:
             return {'error': str(e)}
+
+def format_alerts_for_dashboard(alerts):
+    """ZAP 경고 데이터를 대시보드 표시 형식으로 변환"""
+    formatted = []
+    for alert in alerts:
+        formatted.append({
+            'name': alert.get('alert', 'Unknown'),
+            'risk': alert.get('risk', 'Informational'),
+            'url': alert.get('url', ''),
+            'description': alert.get('description', ''),
+            'solution': alert.get('solution', ''),
+            'evidence': alert.get('evidence', '')
+        })
+    return formatted
 ```
 ---
 

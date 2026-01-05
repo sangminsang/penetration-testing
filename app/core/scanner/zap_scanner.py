@@ -189,3 +189,17 @@ class ZapScanner:
             }
         except Exception as e:
             return {'error': str(e)}
+
+def format_alerts_for_dashboard(alerts):
+    """ZAP 경고 데이터를 대시보드 표시 형식으로 변환"""
+    formatted = []
+    for alert in alerts:
+        formatted.append({
+            'name': alert.get('alert', 'Unknown'),
+            'risk': alert.get('risk', 'Informational'),
+            'url': alert.get('url', ''),
+            'description': alert.get('description', ''),
+            'solution': alert.get('solution', ''),
+            'evidence': alert.get('evidence', '')
+        })
+    return formatted
