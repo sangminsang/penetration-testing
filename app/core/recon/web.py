@@ -52,8 +52,12 @@ def collect_web_info(url):
         print("[WEB] Tool 5: WhatWeb Analysis...")
         if shutil.which('whatweb'):
             cmd = ['whatweb', '--log-json', '-', '--color=never', url]
-            proc = subprocess.run(cmd, capture_output=True, text=True, errors='ignore')
-            if proc.stdout:
+            subprocess.run(cmd, errors='ignore')
+            if os.path.exists('nuclei_results.json'):
+                with open('nuclei_results.json', 'r') as f: nuclei_out = f.read()
+                os.remove('nuclei_results.json')
+            else: nuclei_out = ''
+            if nuclei_out:
                 match = re.search(r'(\{.*"target\":.*\})', proc.stdout)
                 if match:
                     try:
@@ -121,17 +125,21 @@ def collect_web_info(url):
                 '-list', crawled_urls_file,
                 '-tags', 'cve,vuln,tech',
                 '-severity', 'critical,high,medium,low,info',
-                '-j', '-silent'
+                '-j', '-o', 'nuclei_results.json', '-stats', '-si', '10', '-c', '50', '-rl', '100', '-bs', '10'
             ]
             print(f"[DEBUG] Executing Nuclei: {' '.join(cmd)}")
             
-            proc = subprocess.run(cmd, capture_output=True, text=True, errors='ignore')
+            subprocess.run(cmd, errors='ignore')
+            if os.path.exists('nuclei_results.json'):
+                with open('nuclei_results.json', 'r') as f: nuclei_out = f.read()
+                os.remove('nuclei_results.json')
+            else: nuclei_out = ''
             
             target_urls_for_zap = set()
             vuln_count = 0
             
-            if proc.stdout:
-                for line in proc.stdout.strip().split('\n'):
+            if nuclei_out:
+                for line in nuclei_out.strip().split('\n'):
                     if not line: continue
                     try:
                         scan_res = json.loads(line)
