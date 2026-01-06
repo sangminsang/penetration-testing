@@ -1,0 +1,52 @@
+version: '3'
+
+services:
+  mongo:
+    image: cve_search-mongo:latest
+    container_name: cve-search-mongo
+    volumes:
+      - cve-searchdockerversion_mongodb_data:/data/db
+    networks:
+      - cve-search-net
+
+  redis:
+    image: cve_search-redis:latest
+    container_name: cve-search-redis
+    volumes:
+      - cve-searchdockerversion_redis_data:/data
+    networks:
+      - cve-search-net
+
+  cve-search:
+    image: cve_search:latest
+    container_name: cve-search-app
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_HOST=mongo
+      - REDIS_HOST=redis
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - cve-search-net
+
+  # [수정 포인트] zap은 cve-search와 같은 레벨(맨 앞)에 있어야 합니다.
+  zap:
+    image: zaproxy/zap-stable
+    container_name: zap
+    ports:
+      - "8080:8080"
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true -config api.key=12345
+    networks:
+      - cve-search-net
+
+volumes:
+  cve-searchdockerversion_mongodb_data:
+    external: true
+  cve-searchdockerversion_redis_data:
+    external: true
+
+networks:
+  cve-search-net:
+    driver: bridge

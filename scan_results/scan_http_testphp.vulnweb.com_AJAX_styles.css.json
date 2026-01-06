@@ -1,0 +1,22 @@
+{
+    "headers": {
+        "Server": "nginx/1.19.0",
+        "Date": "Tue, 06 Jan 2026 12:42:23 GMT",
+        "Content-Type": "text/css",
+        "Content-Length": "562",
+        "Last-Modified": "Wed, 11 May 2011 10:27:48 GMT",
+        "Connection": "keep-alive",
+        "ETag": "\"4dca64a4-232\"",
+        "Accept-Ranges": "bytes"
+    },
+    "webtechnologies": [
+        {
+            "name": "nginx",
+            "version": "1.19.0",
+            "source": "HTTP-Header"
+        }
+    ],
+    "nuclei_vulns": [],
+    "zap_results": null,
+    "verifications": []
+}

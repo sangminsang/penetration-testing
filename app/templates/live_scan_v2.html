@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* UI 먹통 방지: 모달을 최상위 레이어로 강제 승격 */
+    .modal-backdrop { z-index: 10050 !important; }
+    .modal { z-index: 10055 !important; }
+    .modal-dialog { z-index: 10060 !important; }
+    .modal-content { z-index: 10065 !important; }
+    .tech-card { position: relative; z-index: 1; }
+    
+    /* Intelligence Header Styles */
+    .intelligence-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        color: white;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+    }
+    
+    .security-grade {
+        text-align: center;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+    }
+    
+    .grade-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 15px;
+        font-size: 3rem;
+        font-weight: bold;
+        border: 5px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .ai-summary {
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        border-left: 4px solid #ffd700;
+    }
+    
+    .ai-summary-icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+    }
+    
+    .stats-highlight {
+        text-align: center;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    /* Chart Containers */
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        height: 400px;
+        position: relative;
+    }
+    
+    .chart-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+</style>
+
+<div class="container-fluid mt-4">
+    <!-- Phase 1: Intelligence Header -->
+    <div class="intelligence-header">
+        <div class="row align-items-center">
+            <!-- 좌측: 보안 등급 -->
+            <div class="col-md-3">
+                <div class="security-grade">
+                    <div class="grade-circle" id="grade-circle">
+                        <span id="security-grade">-</span>
+                    </div>
+                    <h5 class="mb-0" id="risk-level">Analyzing...</h5>
+                    <small id="security-score">Score: -</small>
+                </div>
+            </div>
+            
+            <!-- 중앙: AI 요약 -->
+            <div class="col-md-6">
+                <div class="ai-summary">
+                    <div class="ai-summary-icon">🤖</div>
+                    <h6 class="mb-2"><strong>AI Security Analysis</strong></h6>
+                    <p class="mb-0" id="ai-summary-text">
+                        스캔을 시작하면 AI가 보안 상태를 분석합니다...
+                    </p>
+                </div>
+            </div>
+            
+            <!-- 우측: 주요 통계 -->
+            <div class="col-md-3">
+                <div class="stats-highlight">
+                    <div class="mb-3">
+                        <div class="stat-number text-danger" id="critical-count">0</div>
+                        <small>Critical</small>
+                    </div>
+                    <div>
+                        <div class="stat-number text-warning" id="high-count">0</div>
+                        <small>High Risk</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sidebar: Control Panel & Log -->
+        <div class="col-md-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Live Scanner Control</h6>
+                    <div id="scan-status"><span class="badge bg-secondary">Ready</span></div>
+                </div>
+                <div class="card-body">
+                    <h5 class="mb-3">Target: <span id="target-url" class="text-info">{{ project.target }}</span></h5>
+                    
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div id="scan-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+
+                    <button id="start-scan-btn" class="btn btn-primary w-100 btn-lg mb-3">
+                        <i class="fas fa-radar"></i> Start Deep Recon
+                    </button>
+
+                    <div class="terminal-window bg-dark text-light p-3 rounded" style="height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;" id="log-terminal">
+                        <div class="text-muted">Waiting for command...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content: Charts & Grid -->
+        <div class="col-md-8">
+            <!-- Stats Row -->
+            <div class="row">
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-primary shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Open Ports</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-ports">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-network-wired fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-success shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Tech Stack</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-tech">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-layer-group fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-warning shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Vulnerabilities</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-vulns">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-info shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Sitemap</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="stat-urls">0</div>
+                                </div>
+                                <div class="col-auto"><i class="fas fa-sitemap fa-2x text-gray-300"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phase 1: Charts Row -->
+            <div class="row mb-4">
+                <!-- 도넛 차트: 심각도 분포 -->
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            <i class="fas fa-chart-pie text-primary"></i> Vulnerability Severity Distribution
+                        </div>
+                        <canvas id="severityChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- 산점도: CVSS vs EPSS -->
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            <i class="fas fa-chart-scatter text-danger"></i> CVSS vs EPSS Priority Map
+                        </div>
+                        <canvas id="priorityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phase 2: Kill Chain Visualization -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-crosshairs"></i> Attack Kill Chain Scenario
+                    </h6>
+                    <span class="badge bg-danger" id="kill-chain-badge">Waiting for Analysis</span>
+                </div>
+                <div class="card-body">
+                    <div id="mermaid-container" style="min-height: 300px; background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-project-diagram fa-3x mb-3"></i>
+                            <p>공격 시나리오 다이어그램이 여기에 표시됩니다.</p>
+                            <small>스캔 완료 후 AI가 공격 흐름을 분석합니다.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phase 3: Attack Surface Map -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-project-diagram"></i> Attack Surface Map
+                    </h6>
+                    <div>
+                        <button class="btn btn-sm btn-outline-info" onclick="resetGraphZoom()">
+                            <i class="fas fa-search-minus"></i> Reset Zoom
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="attack-surface-graph" style="width: 100%; height: 500px; background: #f8f9fa; border-radius: 8px; border: 2px solid #e0e0e0;">
+                        <div class="text-center text-muted py-5" style="padding-top: 200px !important;">
+                            <i class="fas fa-network-wired fa-3x mb-3"></i>
+                            <p>공격 표면 맵이 여기에 표시됩니다.</p>
+                            <small>스캔 시작 후 네트워크 구조가 시각화됩니다.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tech Grid -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Detected Technologies & Vulnerabilities</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="tech-grid">
+                        <!-- Tech Cards Injected Here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Technology Detail Modal -->
+<div class="modal fade" id="techModal" tabindex="-1" aria-labelledby="techModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold" id="techModalLabel">Technology Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal content will be dynamically injected via JS -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    // Initialize Mermaid
+    mermaid.initialize({ 
+        startOnLoad: true,
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: true,
+            htmlLabels: true,
+            curve: 'basis'
+        }
+    });
+</script>
+<script src="{{ url_for('static', filename='js/attack_surface_map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/live_scan_v2.js') }}?version=5"></script>
+{% endblock %}
+

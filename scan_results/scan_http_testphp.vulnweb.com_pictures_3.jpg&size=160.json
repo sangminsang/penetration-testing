@@ -1,0 +1,20 @@
+{
+    "headers": {
+        "Server": "nginx/1.19.0",
+        "Date": "Tue, 06 Jan 2026 13:55:02 GMT",
+        "Content-Type": "text/html",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "Content-Encoding": "gzip"
+    },
+    "webtechnologies": [
+        {
+            "name": "nginx",
+            "version": "1.19.0",
+            "source": "HTTP-Header"
+        }
+    ],
+    "nuclei_vulns": [],
+    "zap_results": null,
+    "verifications": []
+}

@@ -1,0 +1,7 @@
+flask
+flask-sqlalchemy
+flask-socketio
+requests
+urllib3
+beautifulsoup4
+python-dotenv

