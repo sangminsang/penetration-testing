@@ -334,5 +334,105 @@
 </script>
 <script src="{{ url_for('static', filename='js/attack_surface_map.js') }}"></script>
 <script src="{{ url_for('static', filename='js/live_scan_v2.js') }}?version=5"></script>
+
+<script>
+    window.INITIAL_SCAN_DATA = {{ last_scan.data | tojson | safe if last_scan else 'null' }};
+    window.INITIAL_PROJECT_ID = {{ project.id }};
+    console.log("[DEBUG] Initial Data Injected:", window.INITIAL_SCAN_DATA);
+</script>
+
 {% endblock %}
 
+
+<!-- [추가된 코드] 저장된 스캔 데이터 불러오기 -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("[INFO] Checking for saved scan data...");
+    {% if last_scan and last_scan.data %}
+        try {
+            const savedData = {{ last_scan.data | tojson | safe }};
+            console.log("[DEBUG] Loaded saved scan data:", savedData);
+
+            // 1. 취약점 개수 업데이트
+            const vulnCount = savedData.nuclei_vulns ? savedData.nuclei_vulns.length : 0;
+            const vulnEl = document.querySelector('.card-body h2'); // 첫 번째 큰 숫자
+            if(vulnEl && vulnEl.innerText === '0') vulnEl.innerText = vulnCount;
+
+            // 2. 기술 스택 개수 업데이트
+            const techCount = savedData.webtechnologies ? savedData.webtechnologies.length : 0;
+            const techCards = document.querySelectorAll('.card-body h2');
+            if(techCards[1] && techCards[1].innerText === '0') techCards[1].innerText = techCount;
+
+            console.log(`[SUCCESS] Updated UI: ${vulnCount} vulns, ${techCount} techs`);
+        } catch (e) {
+            console.error("[ERROR] Failed to load saved data:", e);
+        }
+    {% else %}
+        console.log("[INFO] No previous scan data found.");
+    {% endif %}
+});
+</script>
+
+<!-- [RE-ADDED] Saved Data Loader -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("[INFO] Checking for saved scan data (RE-ADDED)...");
+    {% if last_scan and last_scan.data %}
+        try {
+            const savedData = {{ last_scan.data | tojson | safe }};
+            console.log("[DEBUG] Loaded saved scan data:", savedData);
+
+            const vulnCount = savedData.nuclei_vulns ? savedData.nuclei_vulns.length : 0;
+            const vulnEl = document.querySelector('.card-body h2'); 
+            // ID가 명확하지 않으므로, 'VULNERABILITIES' 텍스트 근처의 숫자를 찾거나 첫 번째 큰 숫자 타겟팅
+            // 보통 첫 번째 카드가 아니라 세 번째 카드일 수 있음. 
+            // 안전하게 ID로 접근 시도
+            const elVuln = document.getElementById('vuln-count');
+            if(elVuln) elVuln.innerText = vulnCount;
+            else if(vulnEl) vulnEl.innerText = vulnCount;
+
+            const techCount = savedData.webtechnologies ? savedData.webtechnologies.length : 0;
+            const elTech = document.getElementById('tech-count');
+            if(elTech) elTech.innerText = techCount;
+
+            console.log(`[SUCCESS] Updated UI: ${vulnCount} vulns, ${techCount} techs`);
+        } catch (e) {
+            console.error("[ERROR] Failed to load saved data:", e);
+        }
+    {% else %}
+        console.log("[INFO] No previous scan data found in 'last_scan'.");
+    {% endif %}
+});
+</script>
+
+<!-- [RE-ADDED] Saved Data Loader -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("[INFO] Checking for saved scan data (RE-ADDED)...");
+    {% if last_scan and last_scan.data %}
+        try {
+            const savedData = {{ last_scan.data | tojson | safe }};
+            console.log("[DEBUG] Loaded saved scan data:", savedData);
+
+            const vulnCount = savedData.nuclei_vulns ? savedData.nuclei_vulns.length : 0;
+            const vulnEl = document.querySelector('.card-body h2'); 
+            // ID가 명확하지 않으므로, 'VULNERABILITIES' 텍스트 근처의 숫자를 찾거나 첫 번째 큰 숫자 타겟팅
+            // 보통 첫 번째 카드가 아니라 세 번째 카드일 수 있음. 
+            // 안전하게 ID로 접근 시도
+            const elVuln = document.getElementById('vuln-count');
+            if(elVuln) elVuln.innerText = vulnCount;
+            else if(vulnEl) vulnEl.innerText = vulnCount;
+
+            const techCount = savedData.webtechnologies ? savedData.webtechnologies.length : 0;
+            const elTech = document.getElementById('tech-count');
+            if(elTech) elTech.innerText = techCount;
+
+            console.log(`[SUCCESS] Updated UI: ${vulnCount} vulns, ${techCount} techs`);
+        } catch (e) {
+            console.error("[ERROR] Failed to load saved data:", e);
+        }
+    {% else %}
+        console.log("[INFO] No previous scan data found in 'last_scan'.");
+    {% endif %}
+});
+</script>
