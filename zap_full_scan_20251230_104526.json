@@ -1,0 +1,21 @@
+{
+  "target": "http://localhost:3000",
+  "spider_result": {
+    "scan_id": "1",
+    "status": "completed",
+    "urls_found": [
+      "http://localhost:3000/robots.txt",
+      "http://localhost:3000/sitemap.xml",
+      "http://localhost:3000"
+    ],
+    "progress": 100
+  },
+  "active_scan_result": {
+    "scan_id": null,
+    "status": "failed",
+    "progress": 0,
+    "error": "invalid literal for int() with base 10: 'does_not_exist'"
+  },
+  "alerts": [],
+  "summary": {}
+}

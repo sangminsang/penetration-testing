@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Scan Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #0f0; padding: 20px; }
+        #log-box { 
+            border: 1px solid #333; 
+            background: #000; 
+            height: 300px; 
+            overflow-y: scroll; 
+            padding: 10px; 
+            margin-bottom: 20px;
+        }
+        .log-entry { margin: 2px 0; }
+        .success { color: #0f0; font-weight: bold; }
+        .info { color: #aaa; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Live Scan Dashboard</h1>
+
+    <div style="margin-bottom: 20px;">
+        <input type="text" id="target-url" value="http://testphp.vulnweb.com" 
+               style="padding: 10px; width: 300px; background: #333; color: #fff; border: 1px solid #555;">
+        <button onclick="startScan()" 
+                style="padding: 10px 20px; background: #0f0; color: #000; border: none; cursor: pointer; font-weight: bold;">
+            START SCAN 🚀
+        </button>
+    </div>
+
+    <!-- 로그 박스 -->
+    <div id="log-box"></div>
+    
+    <!-- 기술 스택 카드 영역 -->
+    <div id="tech-stack"></div>
+
+    <script>
+        // 소켓 연결
+        var socket = io();
+
+        socket.on('connect', function() {
+            addLog('Connected to server!', 'success');
+        });
+
+        // 로그 수신 ('scan_log' 이벤트)
+        socket.on('scan_log', function(data) {
+            addLog(data.message, data.level);
+        });
+
+        // 기술 업데이트 수신 ('tech_update' 이벤트)
+        socket.on('tech_update', function(data) {
+            addLog(`[TECH] ${data.name} updated (Confidence: ${data.confidence}%)`, 'success');
+            // 여기에 나중에 게이지 바 업데이트 로직 추가
+        });
+
+        function addLog(msg, level) {
+            var box = document.getElementById('log-box');
+            var div = document.createElement('div');
+            div.className = 'log-entry ' + level;
+            div.innerText = `> ${msg}`;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight; // 자동 스크롤
+        }
+
+        function startScan() {
+            var target = document.getElementById('target-url').value;
+            addLog(`Requesting scan for ${target}...`, 'info');
+            
+            // 백엔드로 스캔 시작 이벤트 전송
+            socket.emit('start_scan', {target: target});
+        }
+    </script>
+</body>
+</html>

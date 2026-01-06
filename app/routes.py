@@ -33,7 +33,11 @@ def delete_project(project_id):
 @bp.route('/live-scan/<int:project_id>')
 def live_scan(project_id):
     project = Project.query.get_or_404(project_id)
+<<<<<<< HEAD
     return render_template('live_scan_v2.html', project=project)
+=======
+    return render_template('live_scan.html', project=project)
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
 
 @bp.route('/url-tree/<int:project_id>')
 def url_tree(project_id):

@@ -1,0 +1,227 @@
+"""
+WebSocket Event Handlers for Real-time Scan Progress
+Handles bidirectional communication between frontend and backend
+"""
+import logging
+from flask_socketio import emit, join_room, leave_room
+from flask import request
+import threading
+
+logger = logging.getLogger(__name__)
+
+class ScanProgressEmitter:
+    """실시간 스캔 진행 상황을 WebSocket으로 전송하는 클래스"""
+
+    def __init__(self, socketio):
+        self.socketio = socketio
+        self.active_scans = {}  # session_id: scan_data
+
+    def emit_scan_started(self, session_id, target):
+        """스캔 시작 이벤트"""
+        self.socketio.emit('scan_started', {
+            'session_id': session_id,
+            'target': target,
+            'timestamp': self._get_timestamp()
+        }, room=session_id)
+        logger.info(f"[WS] Scan started: {target}")
+
+    def emit_progress(self, session_id, stage, progress, current_item=None):
+        """진행률 업데이트"""
+        data = {
+            'stage': stage,
+            'progress': progress,
+            'current_item': current_item,
+            'timestamp': self._get_timestamp()
+        }
+        self.socketio.emit('scan_progress', data, room=session_id)
+        logger.debug(f"[WS] Progress: {stage} {progress}%")
+
+    def emit_url_discovered(self, session_id, url, status_code=None):
+        """URL 발견"""
+        self.socketio.emit('url_discovered', {
+            'url': url,
+            'status_code': status_code,
+            'timestamp': self._get_timestamp()
+        }, room=session_id)
+
+    def emit_technology_detected(self, session_id, name, version=None, category=None):
+        """기술 탐지"""
+        self.socketio.emit('technology_detected', {
+            'name': name,
+            'version': version,
+            'category': category,
+            'timestamp': self._get_timestamp()
+        }, room=session_id)
+
+    def emit_vulnerability_found(self, session_id, cve_id, cvss, description=None):
+        """취약점 발견"""
+        self.socketio.emit('vulnerability_found', {
+            'cve_id': cve_id,
+            'cvss': cvss,
+            'description': description,
+            'timestamp': self._get_timestamp()
+        }, room=session_id)
+
+    def emit_scan_completed(self, session_id, summary):
+        """스캔 완료"""
+        self.socketio.emit('scan_completed', {
+            'summary': summary,
+            'timestamp': self._get_timestamp()
+        }, room=session_id)
+        logger.info(f"[WS] Scan completed")
+
+    def emit_error(self, session_id, message, error_type='general'):
+        """에러 발생"""
+        self.socketio.emit('scan_error', {
+            'message': message,
+            'type': error_type,
+            'timestamp': self._get_timestamp()
+        }, room=session_id)
+        logger.error(f"[WS] Error: {message}")
+
+    def _get_timestamp(self):
+        from datetime import datetime
+        return datetime.utcnow().isoformat()
+
+
+def register_socketio_handlers(socketio, scan_emitter):
+    """SocketIO 이벤트 핸들러 등록"""
+
+    @socketio.on('connect')
+    def handle_connect():
+        session_id = request.sid
+        logger.info(f"[WS] Client connected: {session_id}")
+        join_room(session_id)
+        emit('connected', {'session_id': session_id})
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        session_id = request.sid
+        logger.info(f"[WS] Client disconnected: {session_id}")
+        leave_room(session_id)
+
+    @socketio.on('start_scan')
+    def handle_start_scan(data):
+        """스캔 시작 요청 처리"""
+        session_id = request.sid
+        target = data.get('target')
+        aggressive = data.get('aggressive', True)
+
+        if not target:
+            scan_emitter.emit_error(session_id, "Target URL is required")
+            return
+
+        logger.info(f"[WS] Start scan request: {target}")
+
+        # 백그라운드 스레드에서 스캔 실행
+        thread = threading.Thread(
+            target=run_scan_with_events,
+            args=(session_id, target, aggressive, scan_emitter)
+        )
+        thread.daemon = True
+        thread.start()
+
+
+def run_scan_with_events(session_id, target, aggressive, emitter):
+    """실시간 이벤트를 발생시키면서 스캔 실행"""
+    import time
+    from app.core.recon.nmap import NmapScanner
+    from app.core.recon.web import WebReconEngine
+    from app.core.recon.crawler import URLCrawler
+    from app.core.recon.discovery import DirectoryDiscovery
+
+    try:
+        # 스캔 시작
+        emitter.emit_scan_started(session_id, target)
+
+        # 1. Nmap 스캔
+        emitter.emit_progress(session_id, 'nmap', 0, 'Starting Nmap scan...')
+        scanner = NmapScanner()
+        nmap_results = scanner.scan(target, aggressive=aggressive, mask_ip=True)
+        emitter.emit_progress(session_id, 'nmap', 100, 'Nmap scan completed')
+
+        # Nmap 결과에서 기술 탐지
+        for host in nmap_results.get('hosts', []):
+            for port_info in host.get('ports', []):
+                service = port_info.get('service', 'unknown')
+                if service != 'unknown':
+                    emitter.emit_technology_detected(
+                        session_id, 
+                        service, 
+                        port_info.get('version'),
+                        'service'
+                    )
+
+        time.sleep(0.5)
+
+        # 2. 웹 크롤링
+        emitter.emit_progress(session_id, 'crawling', 0, 'Starting web crawl...')
+        crawler = URLCrawler(max_urls=200)
+
+        # 크롤링 중 URL 발견 콜백
+        def url_callback(url, status_code):
+            emitter.emit_url_discovered(session_id, url, status_code)
+
+        crawler.set_callback(url_callback)
+        crawled_urls = crawler.crawl(target, max_depth=3)
+        emitter.emit_progress(session_id, 'crawling', 100, f'Found {len(crawled_urls)} URLs')
+
+        time.sleep(0.5)
+
+        # 3. 디렉토리 디스커버리
+        emitter.emit_progress(session_id, 'fingerprinting', 0, 'Directory discovery...')
+        discovery = DirectoryDiscovery()
+        discovered_paths = discovery.discover(target)
+
+        for path, code in discovered_paths.items():
+            emitter.emit_url_discovered(session_id, f"{target}{path}", code)
+
+        emitter.emit_progress(session_id, 'fingerprinting', 50, 'Technology detection...')
+
+        # 4. Web Recon (기술 탐지)
+        web_engine = WebReconEngine()
+        web_results = web_engine.scan(target, aggressive=aggressive)
+
+        for tech in web_results.get('technologies', []):
+            emitter.emit_technology_detected(
+                session_id,
+                tech.get('name'),
+                tech.get('version'),
+                tech.get('category')
+            )
+
+        emitter.emit_progress(session_id, 'fingerprinting', 100, 'Fingerprinting completed')
+
+        time.sleep(0.5)
+
+        # 5. CVE 매칭
+        emitter.emit_progress(session_id, 'vulnerability', 0, 'Matching CVEs...')
+
+        # CVE 매칭 로직 (간소화)
+        cve_count = 0
+        for tech in web_results.get('technologies', []):
+            # 실제로는 CVE 데이터베이스 조회
+            if tech.get('vulnerabilities'):
+                for vuln in tech['vulnerabilities'][:5]:  # 최대 5개
+                    emitter.emit_vulnerability_found(
+                        session_id,
+                        vuln.get('cve_id'),
+                        vuln.get('cvss', 0.0),
+                        vuln.get('description')
+                    )
+                    cve_count += 1
+                    time.sleep(0.1)
+
+        emitter.emit_progress(session_id, 'vulnerability', 100, f'Found {cve_count} CVEs')
+
+        # 스캔 완료
+        summary = {
+            'total_urls': len(crawled_urls) + len(discovered_paths),
+            'technologies': len(web_results.get('technologies', [])),
+            'vulnerabilities': cve_count
+        }
+        emitter.emit_scan_completed(session_id, summary)
+
+    except Exception as e:
+        logger.exception(f"[WS] Scan failed: {e}")
+        emitter.emit_error(session_id, str(e))

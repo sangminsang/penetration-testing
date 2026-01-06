@@ -12,10 +12,13 @@ class ZapScanner:
     """
     OWASP ZAP API를 사용한 자동 보안 스캔 클래스
     Spider(크롤링) -> Active Scan(공격 스캔) -> Alert 수집
+<<<<<<< HEAD
     
     [개선 사항] 2026-01-06
     - Katana/Nuclei 등 외부 도구에서 수집한 URL을 받아
       중복 크롤링 없이 즉시 Active Scan을 수행하는 최적화 모드 추가
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
     """
     
     def __init__(
@@ -44,6 +47,7 @@ class ZapScanner:
             raise
 
     def access_target(self, target_url: str) -> bool:
+<<<<<<< HEAD
         """
         ZAP이 해당 URL을 인지하도록 단순 접속 (ZAP Tree 등록용)
         """
@@ -52,15 +56,24 @@ class ZapScanner:
             # followredirects=True로 설정하여 최종 목적지까지 도달하게 함
             self.zap.core.access_url(url=target_url, followredirects=True)
             # time.sleep(1) # 너무 빠른 요청 방지
+=======
+        try:
+            logger.info(f"Accessing target URL: {target_url}")
+            self.zap.core.access_url(url=target_url, followredirects=True)
+            time.sleep(2)
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
             return True
         except Exception as e:
             logger.error(f"Failed to access target: {e}")
             return False
 
     def run_spider(self, target_url: str, max_children: Optional[int] = None) -> Dict[str, Any]:
+<<<<<<< HEAD
         """
         [Legacy] ZAP 자체 스파이더 실행 (느릴 수 있음)
         """
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
         try:
             logger.info(f"Starting Spider scan on: {target_url}")
             if max_children is None:
@@ -75,7 +88,11 @@ class ZapScanner:
             logger.info(f"Spider scan started. Scan ID: {scan_id}")
             
             start_time = time.time()
+<<<<<<< HEAD
             timeout = 300  # 5분 제한
+=======
+            timeout = 60
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
             
             while True:
                 try:
@@ -102,9 +119,12 @@ class ZapScanner:
             return {'status': 'failed', 'error': str(e)}
 
     def run_active_scan(self, target_url: str, recurse: bool = True, scan_policy_name: str = None, context_id: str = None) -> Dict[str, Any]:
+<<<<<<< HEAD
         """
         단일 URL에 대한 Active Scan 실행
         """
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
         try:
             logger.info(f"Starting Active Scan on: {target_url} (Recurse: {recurse})")
             scan_id = self.zap.ascan.scan(
@@ -118,8 +138,11 @@ class ZapScanner:
             if not scan_id or scan_id == 'does_not_exist' or not str(scan_id).isdigit():
                 return {'status': 'failed', 'error': f"Invalid scan ID: {scan_id}"}
             
+<<<<<<< HEAD
             # 비동기 처리를 위해 대기하지 않고 ID만 리턴하는 것이 좋을 수 있으나,
             # 현재 구조상 대기 로직 유지 (타임아웃 적용)
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
             start_time = time.time()
             while True:
                 try:
@@ -139,6 +162,7 @@ class ZapScanner:
             logger.error(f"Active scan failed: {e}")
             return {'status': 'failed', 'error': str(e)}
 
+<<<<<<< HEAD
     def run_active_scan_on_list(self, target_urls: List[str]) -> Dict[str, Any]:
         """
         [최적화됨] URL 리스트를 받아 '크롤링 없이' 즉시 공격 수행
@@ -198,12 +222,17 @@ class ZapScanner:
                 break
         logger.info("All ZAP active scans completed.")
 
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
     def get_alerts(self, base_url: Optional[str] = None, risk_levels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         try:
             if risk_levels is None:
                 risk_levels = ['High', 'Medium']
             
+<<<<<<< HEAD
             # baseurl이 있으면 해당 사이트만, 없으면 전체 알림 가져오기
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
             all_alerts = self.zap.core.alerts(baseurl=base_url)
             filtered_alerts = []
             
@@ -226,6 +255,7 @@ class ZapScanner:
     def targeted_scan(self, target_urls: List[str]) -> Dict[str, Any]:
         """
         Nuclei 등에서 발견된 특정 URL만 정밀 타격 (Funnel 전략)
+<<<<<<< HEAD
         Legacy 호환성을 위해 유지하되, 내부적으로는 최적화 로직 사용 가능
         """
         return self.fast_scan_with_external_urls(target_urls)
@@ -234,6 +264,25 @@ class ZapScanner:
         """
         [Legacy] 전체 스캔 워크플로우 (하위 호환성 유지)
         """
+=======
+        """
+        results = {'scanned_urls': [], 'alerts': []}
+        logger.info(f"Starting TARGETED ZAP SCAN on {len(target_urls)} URLs")
+        
+        for url in target_urls:
+            try:
+                self.access_target(url)
+                scan_result = self.run_active_scan(url, recurse=False)
+                results['scanned_urls'].append({'url': url, 'status': scan_result.get('status')})
+            except Exception as e:
+                logger.error(f"Failed targeted scan for {url}: {e}")
+        
+        results['alerts'] = self.get_alerts(risk_levels=['High', 'Medium', 'Low'])
+        return results
+
+    def full_scan(self, target_url: str, run_spider: bool = True, run_active: bool = True, risk_levels: List[str] = None) -> Dict[str, Any]:
+        """전체 스캔 워크플로우"""
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
         try:
             if not self.access_target(target_url):
                 raise Exception("Failed to access target URL")
@@ -256,6 +305,7 @@ class ZapScanner:
             }
         except Exception as e:
             return {'error': str(e)}
+<<<<<<< HEAD
             
     def fast_scan_with_external_urls(self, url_list: List[str]) -> Dict[str, Any]:
         """
@@ -280,6 +330,8 @@ class ZapScanner:
         except Exception as e:
             logger.error(f"Fast scan failed: {e}")
             return {'error': str(e)}
+=======
+>>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
 
 def format_alerts_for_dashboard(alerts):
     """ZAP 경고 데이터를 대시보드 표시 형식으로 변환"""
