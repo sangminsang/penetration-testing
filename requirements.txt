@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 flask
 flask-sqlalchemy
 flask-socketio
@@ -6,16 +5,3 @@ requests
 urllib3
 beautifulsoup4
 python-dotenv
-=======
-Flask
-python-nmap
-requests
-packaging>=21.0
-python-owasp-zap-v2.4==0.0.22
-zaproxy==0.2.0
-python-Wappalyzer
-playwright
-lxml
-beautifulsoup4
-aiohttp
->>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642

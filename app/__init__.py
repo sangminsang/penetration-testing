@@ -27,8 +27,5 @@ def create_app():
         db.create_all()
 
     return app, socketio
-<<<<<<< HEAD
 
 
-=======
->>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642

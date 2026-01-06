@@ -73,11 +73,7 @@ def scan_single_host_sync(ip: str, ports: List[int] = [80, 443, 8080, 8000, 3000
         스캔 결과
     """
     # 순환 import 방지: 함수 내부에서 import
-<<<<<<< HEAD
     from ..workflow import async_scan_workflow
-=======
-    from ..api.routes import async_scan_workflow
->>>>>>> 6765f0338e4cc09c98a75bde603f7d50bbd85642
     import asyncio
     
     print(f"[SCANNER] 🎯 Scanning {ip}...")
