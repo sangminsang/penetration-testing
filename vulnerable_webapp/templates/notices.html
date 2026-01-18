@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}공지사항{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fas fa-bullhorn"></i> 공지사항</h1>
+        <p>VulnBank의 최신 소식을 확인하세요</p>
+        
+        {% if session.logged_in %}
+            <a href="{{ url_for('write_notice') }}" class="btn btn-primary">
+                <i class="fas fa-pen"></i> 글쓰기
+            </a>
+        {% endif %}
+    </div>
+    
+    <div class="content-card">
+        {% if notices %}
+            <div class="notice-list-full">
+                {% for notice in notices %}
+                    <div class="notice-item">
+                        <div class="notice-info">
+                            <span class="notice-id">#{{ notice['id'] }}</span>
+                            <a href="{{ url_for('view_notice', notice_id=notice['id']) }}" class="notice-title-link">
+                                {{ notice['title'] }}
+                            </a>
+                        </div>
+                        <div class="notice-meta">
+                            <span class="notice-date">
+                                <i class="fas fa-clock"></i>
+                                {{ notice['created_at'][:10] if notice['created_at'] else 'N/A' }}
+                            </span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="no-data">등록된 공지사항이 없습니다.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

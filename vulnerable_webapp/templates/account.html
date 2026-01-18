@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}계좌 정보{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fas fa-university"></i> 계좌 정보</h1>
+        <!-- 취약점: IDOR - URL의 user_id만 변경하면 다른 사용자 정보 조회 가능 -->
+        <p>{{ user['username'] }}님의 계좌 정보입니다</p>
+    </div>
+    
+    {% if user %}
+        <!-- 계좌 요약 -->
+        <div class="content-card account-summary">
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-label">계좌번호</span>
+                    <span class="summary-value">{{ "110-%03d-%06d"|format(user['id'], user['id'] * 123456 % 1000000) }}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">예금주</span>
+                    <span class="summary-value">{{ user['username'] }}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">이메일</span>
+                    <!-- 취약점: 다른 사용자 이메일 노출 -->
+                    <span class="summary-value">{{ user['email'] }}</span>
+                </div>
+                <div class="summary-item highlight">
+                    <span class="summary-label">현재 잔액</span>
+                    <!-- 취약점: 다른 사용자 잔액 노출 -->
+                    <span class="summary-value">₩{{ "{:,.0f}".format(user['balance']) }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 거래 내역 -->
+        <div class="content-card">
+            <h3><i class="fas fa-list"></i> 거래 내역</h3>
+            
+            {% if transactions %}
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>번호</th>
+                                <th>일시</th>
+                                <th>유형</th>
+                                <th>상대방</th>
+                                <th>금액</th>
+                                <th>메모</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in transactions %}
+                                <tr>
+                                    <td>{{ t['id'] }}</td>
+                                    <td>{{ t['created_at'] }}</td>
+                                    <td>
+                                        {% if t['from_user_id'] == user['id'] %}
+                                            <span class="badge badge-out">출금</span>
+                                        {% else %}
+                                            <span class="badge badge-in">입금</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if t['from_user_id'] == user['id'] %}
+                                            <!-- 취약점: IDOR - 링크 클릭으로 다른 사용자 정보 접근 -->
+                                            <a href="{{ url_for('account', user_id=t['to_user_id']) }}">
+                                                {{ t['to_username'] }}
+                                            </a>
+                                        {% else %}
+                                            <a href="{{ url_for('account', user_id=t['from_user_id']) }}">
+                                                {{ t['from_username'] }}
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                    <td class="{% if t['from_user_id'] == user['id'] %}amount-out{% else %}amount-in{% endif %}">
+                                        {% if t['from_user_id'] == user['id'] %}
+                                            -₩{{ "{:,.0f}".format(t['amount']) }}
+                                        {% else %}
+                                            +₩{{ "{:,.0f}".format(t['amount']) }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <!-- 취약점: Stored XSS - memo가 이스케이프되지 않음 -->
+                                        {{ t['memo'] | safe }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="no-data">거래 내역이 없습니다.</p>
+            {% endif %}
+        </div>
+        
+        <!-- 취약점 힌트 -->
+        <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; font-size: 12px;">
+            <p><strong>🔍 IDOR 취약점 테스트:</strong></p>
+            <p>URL의 user_id를 변경해보세요:</p>
+            <ul style="margin-left: 20px;">
+                <li>/account/1 - 관리자 계좌</li>
+                <li>/account/2 - 다른 사용자 계좌</li>
+                <li>/account/3 - 또 다른 사용자</li>
+            </ul>
+        </div>
+    {% else %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i>
+            사용자를 찾을 수 없습니다.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

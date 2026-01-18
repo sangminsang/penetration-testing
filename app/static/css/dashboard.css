@@ -1,0 +1,763 @@
+/* Tailwind CSS 스타일 다크 테마 (Slate 900 배경) */
+
+/* Slate 색상 팔레트 (Tailwind 기준) */
+:root {
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    
+    /* 강조 색상 */
+    --primary-blue: #3b82f6;
+    --danger-red: #ef4444;
+    --warning-orange: #f97316;
+}
+
+/* 전체 배경: Slate 900 */
+body {
+    background-color: var(--slate-900) !important;
+    color: var(--slate-200) !important;
+}
+
+/* 터미널 창 스타일 */
+.log-terminal {
+    background-color: #000000;
+    color: #00ff00;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 0.875rem;
+    padding: 1rem;
+    height: 400px;
+    overflow-y: auto;
+    border-radius: 0.25rem;
+}
+
+.log-terminal .log-line {
+    margin-bottom: 0.25rem;
+    line-height: 1.5;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.log-terminal .log-line.text-success {
+    color: #00ff00;
+}
+
+.log-terminal .log-line.text-danger {
+    color: #ff0000;
+}
+
+.log-terminal .log-line.text-warning {
+    color: #ffff00;
+}
+
+.log-terminal .log-line.text-info {
+    color: #00ffff;
+}
+
+.log-terminal .log-line.text-muted {
+    color: #666666;
+}
+
+/* 대시보드 헤더 */
+.dashboard-header {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--slate-700);
+    color: var(--slate-100);
+}
+
+.dashboard-header h1 {
+    color: var(--slate-100);
+    font-weight: 600;
+}
+
+.dashboard-header .text-muted {
+    color: var(--slate-400) !important;
+}
+
+.dashboard-header strong {
+    color: var(--slate-200);
+}
+
+/* 대시보드 컨트롤 */
+.dashboard-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* 카드 스타일: Slate 800 배경, Slate 700 테두리 */
+.card {
+    background-color: var(--slate-800) !important;
+    border: 1px solid var(--slate-700) !important;
+    border-radius: 0.5rem;
+    color: var(--slate-200);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.card-header {
+    background-color: var(--slate-800) !important;
+    border-bottom: 1px solid var(--slate-700) !important;
+    color: var(--slate-100) !important;
+}
+
+.card-body {
+    color: var(--slate-200);
+}
+
+.card-title {
+    color: var(--slate-100);
+}
+
+.card-subtitle {
+    color: var(--slate-400) !important;
+}
+
+/* 요약 카드 특수 스타일 */
+.summary-card {
+    background-color: var(--slate-800) !important;
+    border: 1px solid var(--slate-700) !important;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    min-height: 140px; /* 카드 최소 높이 통일 */
+}
+
+.summary-card .card-body {
+    min-height: 120px; /* 카드 본문 최소 높이 통일 */
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+}
+
+/* 전체 취약점 카드: 파란색 강조 */
+.card-total .icon-circle {
+    background: linear-gradient(135deg, var(--primary-blue), #2563eb) !important;
+}
+
+.card-total .card-title {
+    color: var(--primary-blue);
+}
+
+/* 위험 취약점 카드: 빨간색/주황색 강조 */
+.card-critical .icon-circle {
+    background: linear-gradient(135deg, var(--danger-red), var(--warning-orange)) !important;
+}
+
+.card-critical .card-title {
+    color: var(--danger-red);
+}
+
+/* 아이콘 원 */
+.icon-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+/* 텍스트 색상 */
+.text-muted {
+    color: var(--slate-400) !important;
+}
+
+/* DataTables 다크 모드 스타일 */
+.table {
+    background-color: var(--slate-800) !important;
+    color: var(--slate-200) !important;
+}
+
+.table thead th {
+    background-color: var(--slate-700) !important;
+    border-bottom: 2px solid var(--slate-600) !important;
+    color: var(--slate-100) !important;
+    font-weight: 600;
+}
+
+.table tbody td {
+    background-color: var(--slate-800) !important;
+    border-bottom: 1px solid var(--slate-700) !important;
+    color: var(--slate-200) !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    padding: 1rem !important;
+    vertical-align: top !important;
+    line-height: 1.5 !important;
+}
+
+/* 취약점 이름/설명 열 스타일 (첫 번째 열) */
+#vulnerabilitiesTable tbody td:first-child {
+    padding: 0.75rem !important;
+    vertical-align: top !important;
+}
+
+#vulnerabilitiesTable tbody td:first-child > div {
+    margin: 0 !important;
+}
+
+/* URL 링크 스타일 */
+#vulnerabilitiesTable tbody td a {
+    color: var(--primary-blue);
+    text-decoration: underline;
+    word-break: break-all !important;
+}
+
+#vulnerabilitiesTable tbody td a:hover {
+    color: #60a5fa;
+}
+
+.table tbody tr:hover {
+    background-color: var(--slate-700) !important;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--slate-800) !important;
+}
+
+.table-striped tbody tr:nth-of-type(even) {
+    background-color: rgba(30, 41, 59, 0.5) !important;
+}
+
+/* DataTables 컨트롤 영역 */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+    color: var(--slate-200) !important;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+    background-color: var(--slate-700) !important;
+    border: 1px solid var(--slate-600) !important;
+    color: var(--slate-100) !important;
+    border-radius: 0.375rem;
+}
+
+.dataTables_wrapper .dataTables_filter input:focus {
+    background-color: var(--slate-700) !important;
+    border-color: var(--primary-blue) !important;
+    color: var(--slate-100) !important;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dataTables_wrapper .dataTables_length select {
+    background-color: var(--slate-700) !important;
+    border: 1px solid var(--slate-600) !important;
+    color: var(--slate-100) !important;
+    border-radius: 0.375rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    color: var(--slate-200) !important;
+    background-color: var(--slate-800) !important;
+    border: 1px solid var(--slate-700) !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background-color: var(--slate-700) !important;
+    border-color: var(--slate-600) !important;
+    color: var(--slate-100) !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background-color: var(--primary-blue) !important;
+    border-color: var(--primary-blue) !important;
+    color: white !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+    background-color: #2563eb !important;
+}
+
+/* 배지 (Badge) 스타일 */
+.badge {
+    border-radius: 0.375rem;
+}
+
+/* 프로그레스 바 */
+.progress {
+    background-color: var(--slate-700) !important;
+    border-radius: 0.5rem;
+}
+
+/* 전문가 탭 스타일 */
+.nav-tabs-custom .nav-link {
+    color: var(--slate-300);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs-custom .nav-link:hover {
+    color: var(--slate-100);
+    border-bottom-color: var(--slate-600);
+}
+
+.nav-tabs-custom .nav-link.active {
+    color: var(--slate-100);
+    background-color: transparent;
+    border-bottom-color: #0d6efd;
+    font-weight: 600;
+}
+
+/* 인프라 서비스 카드 스타일 */
+#infrastructure-grid .card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#infrastructure-grid .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* 취약점 모달 스타일 */
+#vulnerabilityModal .modal-content {
+    border: 1px solid var(--slate-700);
+    background-color: var(--slate-800) !important;
+}
+
+#vulnerabilityModal .modal-body {
+    background-color: var(--slate-800) !important;
+}
+
+#vulnerabilityModal pre {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    background-color: var(--slate-900) !important;
+    color: var(--slate-100) !important;
+}
+
+/* 취약점 모달 내부 텍스트 스타일 (색상 문제 해결) */
+#vulnerabilityModal .modal-body h6 {
+    color: var(--slate-100) !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.5rem !important;
+}
+
+#vulnerabilityModal .modal-body p {
+    color: var(--slate-200) !important;
+    background-color: transparent !important;
+}
+
+#vulnerabilityModal .modal-body #modal-name,
+#vulnerabilityModal .modal-body #modal-confidence,
+#vulnerabilityModal .modal-body #modal-solution {
+    color: var(--slate-200) !important;
+    background-color: transparent !important;
+}
+
+#vulnerabilityModal .modal-body #modal-evidence {
+    color: var(--slate-100) !important;
+    background-color: var(--slate-900) !important;
+}
+
+#vulnerabilityModal .modal-footer {
+    background-color: var(--slate-700) !important;
+}
+
+#vulnerabilityModal .modal-header {
+    background-color: var(--slate-700) !important;
+}
+
+/* AI 요약 카드 스타일 */
+#ai-summary-card {
+    border-left: 4px solid #0d6efd;
+}
+
+#ai-summary-card .card-body {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* 엔드포인트 테이블 스타일 */
+#endpointsTable {
+    font-size: 0.9rem;
+    color: var(--slate-200);
+}
+
+#endpointsTable thead th {
+    background-color: var(--slate-700);
+    border-bottom: 2px solid var(--slate-600);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: var(--slate-100);
+    padding: 1rem;
+}
+
+#endpointsTable tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    border-top: 1px solid var(--slate-700);
+    white-space: normal !important;
+    word-break: break-word !important;
+}
+
+#endpointsTable tbody tr:hover {
+    background-color: var(--slate-700);
+}
+
+.progress-bar {
+    background-color: var(--primary-blue) !important;
+}
+
+/* 탭 네비게이션 */
+.nav-tabs {
+    border-bottom: 1px solid var(--slate-700) !important;
+}
+
+.nav-tabs-custom {
+    display: flex;
+}
+
+.nav-tabs-custom .nav-item {
+    flex: 1;
+    text-align: center;
+}
+
+.nav-tabs-custom .nav-link {
+    color: var(--slate-300);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+    background-color: transparent;
+    width: 100%;
+    display: block;
+    text-align: center;
+}
+
+.nav-tabs-custom .nav-link:hover {
+    color: var(--slate-100);
+    border-bottom-color: var(--slate-600);
+    background-color: transparent;
+}
+
+.nav-tabs-custom .nav-link.active {
+    color: var(--slate-100);
+    background-color: transparent;
+    border-bottom-color: #0d6efd;
+    font-weight: 600;
+}
+
+.nav-tabs .nav-link {
+    color: var(--slate-400) !important;
+    background-color: transparent !important;
+    border: 1px solid transparent !important;
+    border-bottom-color: transparent !important;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--slate-200) !important;
+    border-color: var(--slate-700) var(--slate-700) var(--slate-700) !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--slate-100) !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) var(--slate-700) transparent !important;
+}
+
+.tab-content {
+    color: var(--slate-200);
+}
+
+/* CWE 카드 스타일 */
+.cwe-card {
+    background-color: var(--slate-800);
+    border: 1px solid var(--slate-700);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cwe-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.cwe-card h6 {
+    color: var(--slate-100);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.cwe-card p {
+    color: var(--slate-300);
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+
+/* AI 리포트 콘텐츠 */
+.ai-report-content {
+    color: var(--slate-200);
+    line-height: 1.7;
+    background-color: var(--slate-800) !important;
+}
+
+.ai-report-content h1,
+.ai-report-content h2,
+.ai-report-content h3,
+.ai-report-content h4,
+.ai-report-content h5,
+.ai-report-content h6 {
+    color: var(--slate-100);
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.ai-report-content pre {
+    background-color: var(--slate-900) !important;
+    border: 1px solid var(--slate-700) !important;
+    color: var(--slate-200) !important;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+}
+
+.ai-report-content code {
+    background-color: var(--slate-900) !important;
+    color: var(--slate-200) !important;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+}
+
+.ai-report-content blockquote {
+    border-left: 4px solid var(--slate-600);
+    padding-left: 1rem;
+    color: var(--slate-300);
+    margin: 1rem 0;
+}
+
+.ai-report-content a {
+    color: var(--primary-blue);
+    text-decoration: underline;
+}
+
+.ai-report-content a:hover {
+    color: #60a5fa;
+}
+
+.ai-report-content ul,
+.ai-report-content ol {
+    color: var(--slate-200);
+    margin-left: 1.5rem;
+}
+
+.ai-report-content li {
+    margin-bottom: 0.5rem;
+}
+
+/* AI 리포트 테이블 스타일 */
+.ai-report-content table {
+    background-color: var(--slate-800) !important;
+    color: var(--slate-200) !important;
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+}
+
+.ai-report-content table th {
+    background-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+    border: 1px solid var(--slate-600) !important;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.ai-report-content table td {
+    background-color: var(--slate-800) !important;
+    color: var(--slate-200) !important;
+    border: 1px solid var(--slate-700) !important;
+    padding: 0.75rem 1rem;
+}
+
+.ai-report-content table tr:nth-child(even) {
+    background-color: rgba(30, 41, 59, 0.5) !important;
+}
+
+.ai-report-content table tr:hover {
+    background-color: var(--slate-700) !important;
+}
+
+/* AI 리포트 p 태그 스타일 */
+.ai-report-content p {
+    color: var(--slate-200) !important;
+    margin-bottom: 1rem;
+}
+
+/* AI 리포트 strong 태그 스타일 */
+.ai-report-content strong {
+    color: var(--slate-100) !important;
+    font-weight: 600;
+}
+
+/* 알림 (Alert) */
+.alert {
+    border: 1px solid;
+    border-radius: 0.5rem;
+}
+
+.alert-warning {
+    background-color: rgba(251, 191, 36, 0.1) !important;
+    border-color: rgba(251, 191, 36, 0.3) !important;
+    color: #fbbf24 !important;
+}
+
+.alert-danger {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #ef4444 !important;
+}
+
+.alert-info {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+    color: var(--primary-blue) !important;
+}
+
+.alert-success {
+    background-color: rgba(34, 197, 94, 0.1) !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+    color: #22c55e !important;
+}
+
+/* 버튼 스타일 유지 (기존 Bootstrap 스타일) */
+.btn-primary {
+    background-color: var(--primary-blue);
+    border-color: var(--primary-blue);
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+
+/* 링크 스타일 */
+a {
+    color: var(--primary-blue);
+}
+
+a:hover {
+    color: #60a5fa;
+}
+
+/* 차트 컨테이너 */
+.chart-container {
+    background-color: var(--slate-800);
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+/* 스캔 상태 메시지 */
+#scan-stage,
+#scan-message,
+#scan-percentage {
+    color: var(--slate-300) !important;
+}
+
+/* 모달 backdrop 다크 테마 */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.modal-backdrop.show {
+    opacity: 1 !important;
+}
+
+/* 모달 테이블 다크 테마 강화 */
+#cweVulnerabilitiesModal .table,
+#cweVulnerabilitiesModal .table td,
+#cweVulnerabilitiesModal .table th {
+    border-color: var(--slate-600) !important;
+    background-color: var(--slate-800) !important;
+    color: var(--slate-200) !important;
+}
+
+#cweVulnerabilitiesModal .table thead th {
+    background-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cweVulnerabilitiesModal .table tbody tr {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cweVulnerabilitiesModal .table tbody tr:hover {
+    background-color: var(--slate-750) !important;
+}
+
+/* 모달 본문 배경 */
+#cweVulnerabilitiesModal .modal-body {
+    background-color: var(--slate-800) !important;
+}
+
+#cweVulnerabilitiesModal .modal-content {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cweVulnerabilitiesModal .modal-header {
+    background-color: var(--slate-700) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cweVulnerabilitiesModal .modal-footer {
+    background-color: var(--slate-700) !important;
+    border-color: var(--slate-600) !important;
+}
+
+/* CVE 상세 정보 모달 다크 테마 강화 */
+#cveDetailModal .modal-body {
+    background-color: var(--slate-800) !important;
+    color: var(--slate-200) !important;
+}
+
+#cveDetailModal .modal-content {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cveDetailModal .modal-header {
+    background-color: var(--slate-700) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cveDetailModal .modal-footer {
+    background-color: var(--slate-700) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cveDetailModal .card {
+    background-color: var(--slate-700) !important;
+    border-color: var(--slate-600) !important;
+}
+
+#cveDetailModal .card-body {
+    background-color: var(--slate-700) !important;
+    color: var(--slate-200) !important;
+}
+
+#cveDetailModal code {
+    background-color: var(--slate-800) !important;
+    color: var(--slate-200) !important;
+}

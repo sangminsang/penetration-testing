@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}서버 상태{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fas fa-server"></i> 서버 상태 확인</h1>
+        <p>서버 연결 상태를 확인합니다</p>
+    </div>
+    
+    <div class="content-card">
+        <form action="{{ url_for('server_status') }}" method="GET" class="server-form">
+            <div class="form-group">
+                <label for="host">
+                    <i class="fas fa-network-wired"></i> 호스트 주소
+                </label>
+                <!-- 취약점: 커맨드 인젝션 가능 -->
+                <input type="text" id="host" name="host" value="{{ host }}"
+                       placeholder="확인할 호스트를 입력하세요 (예: localhost)">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-sync"></i> 확인
+            </button>
+        </form>
+    </div>
+    
+    {% if output %}
+        <div class="content-card">
+            <h3><i class="fas fa-terminal"></i> 결과</h3>
+            <div class="terminal-output">
+                <pre>{{ output }}</pre>
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- 커맨드 인젝션 테스트 힌트 -->
+    <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #f8d7da; border-radius: 8px; font-size: 12px;">
+        <p><strong>💉 커맨드 인젝션 취약점:</strong></p>
+        <p>입력값이 쉘 명령어에 직접 전달됩니다.</p>
+        <p><strong>테스트 페이로드:</strong></p>
+        <ul style="margin-left: 20px;">
+            <li><code>localhost; whoami</code></li>
+            <li><code>localhost; cat /etc/passwd</code></li>
+            <li><code>localhost; ls -la</code></li>
+            <li><code>localhost | id</code></li>
+            <li><code>localhost && uname -a</code></li>
+            <li><code>$(whoami)</code></li>
+            <li><code>`id`</code></li>
+        </ul>
+        <p style="margin-top: 10px;"><strong>Windows의 경우:</strong></p>
+        <ul style="margin-left: 20px;">
+            <li><code>localhost & whoami</code></li>
+            <li><code>localhost & dir</code></li>
+            <li><code>localhost | type C:\Windows\win.ini</code></li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

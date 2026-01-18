@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}대시보드{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1><i class="fas fa-chart-line"></i> 대시보드</h1>
+        <p>안녕하세요, <strong>{{ session.username }}</strong>님!</p>
+    </div>
+    
+    <div class="dashboard-grid">
+        <!-- 계좌 정보 카드 -->
+        <div class="dashboard-card account-card">
+            <div class="card-header">
+                <h3><i class="fas fa-wallet"></i> 내 계좌</h3>
+                <!-- 취약점: IDOR - 다른 사용자 계좌 조회 가능 -->
+                <a href="{{ url_for('account', user_id=session.user_id) }}" class="card-link">상세보기 →</a>
+            </div>
+            <div class="card-body">
+                <div class="balance">
+                    <span class="balance-label">현재 잔액</span>
+                    <span class="balance-amount">₩{{ "{:,.0f}".format(user['balance']) }}</span>
+                </div>
+                <div class="account-info">
+                    <p><strong>계좌번호:</strong> {{ "110-%03d-%06d"|format(user['id'], user['id'] * 123456 % 1000000) }}</p>
+                    <p><strong>계좌 유형:</strong> 자유입출금</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 빠른 메뉴 -->
+        <div class="dashboard-card quick-menu">
+            <div class="card-header">
+                <h3><i class="fas fa-th-large"></i> 빠른 메뉴</h3>
+            </div>
+            <div class="card-body">
+                <div class="quick-menu-grid">
+                    <a href="{{ url_for('transfer') }}" class="quick-item">
+                        <i class="fas fa-exchange-alt"></i>
+                        <span>송금</span>
+                    </a>
+                    <a href="{{ url_for('account', user_id=session.user_id) }}" class="quick-item">
+                        <i class="fas fa-history"></i>
+                        <span>거래내역</span>
+                    </a>
+                    <a href="{{ url_for('profile') }}" class="quick-item">
+                        <i class="fas fa-user-cog"></i>
+                        <span>프로필</span>
+                    </a>
+                    <a href="{{ url_for('change_password') }}" class="quick-item">
+                        <i class="fas fa-key"></i>
+                        <span>비밀번호</span>
+                    </a>
+                    <a href="{{ url_for('notices') }}" class="quick-item">
+                        <i class="fas fa-bullhorn"></i>
+                        <span>공지사항</span>
+                    </a>
+                    <a href="{{ url_for('search') }}" class="quick-item">
+                        <i class="fas fa-search"></i>
+                        <span>검색</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 최근 거래 내역 -->
+        <div class="dashboard-card transactions-card">
+            <div class="card-header">
+                <h3><i class="fas fa-list"></i> 최근 거래 내역</h3>
+                <a href="{{ url_for('account', user_id=session.user_id) }}" class="card-link">전체보기 →</a>
+            </div>
+            <div class="card-body">
+                {% if transactions %}
+                    <table class="transactions-table">
+                        <thead>
+                            <tr>
+                                <th>날짜</th>
+                                <th>내용</th>
+                                <th>금액</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in transactions %}
+                                <tr>
+                                    <td>{{ t['created_at'][:10] }}</td>
+                                    <td>
+                                        {% if t['from_user_id'] == session.user_id %}
+                                            <span class="tx-out">→ {{ t['other_user'] }}에게 송금</span>
+                                        {% else %}
+                                            <span class="tx-in">← {{ t['other_user'] }}님으로부터</span>
+                                        {% endif %}
+                                        <!-- 취약점: XSS - memo가 이스케이프되지 않음 -->
+                                        {% if t['memo'] %}
+                                            <br><small>{{ t['memo'] | safe }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="{% if t['from_user_id'] == session.user_id %}amount-out{% else %}amount-in{% endif %}">
+                                        {% if t['from_user_id'] == session.user_id %}
+                                            -₩{{ "{:,.0f}".format(t['amount']) }}
+                                        {% else %}
+                                            +₩{{ "{:,.0f}".format(t['amount']) }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="no-data">거래 내역이 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 공지사항 -->
+        <div class="dashboard-card notice-card">
+            <div class="card-header">
+                <h3><i class="fas fa-bullhorn"></i> 공지사항</h3>
+                <a href="{{ url_for('notices') }}" class="card-link">전체보기 →</a>
+            </div>
+            <div class="card-body">
+                <ul class="notice-list">
+                    <li>
+                        <a href="{{ url_for('view_notice', notice_id=1) }}">
+                            <span class="notice-title">시스템 점검 안내</span>
+                            <span class="notice-date">2024-01-15</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 취약점: 세션 정보 주석으로 노출 -->
+<!-- 
+현재 세션 정보:
+user_id: {{ session.user_id }}
+username: {{ session.username }}
+is_admin: {{ session.is_admin }}
+-->
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}공지사항 작성{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <a href="{{ url_for('notices') }}" class="back-link">
+            <i class="fas fa-arrow-left"></i> 목록으로
+        </a>
+        <h1><i class="fas fa-pen"></i> 공지사항 작성</h1>
+    </div>
+    
+    <div class="content-card">
+        <!-- 취약점: CSRF 토큰 없음 -->
+        <form method="POST" action="{{ url_for('write_notice') }}" class="notice-form">
+            <div class="form-group">
+                <label for="title">
+                    <i class="fas fa-heading"></i> 제목
+                </label>
+                <input type="text" id="title" name="title" required
+                       placeholder="제목을 입력하세요">
+            </div>
+            
+            <div class="form-group">
+                <label for="content">
+                    <i class="fas fa-file-alt"></i> 내용
+                </label>
+                <!-- 취약점: XSS 필터링 없음 - HTML 태그가 그대로 저장됨 -->
+                <textarea id="content" name="content" rows="10" required
+                          placeholder="내용을 입력하세요. HTML 태그도 사용 가능합니다."></textarea>
+                <small class="form-hint">
+                    <i class="fas fa-info-circle"></i> HTML 태그를 사용할 수 있습니다. (취약점!)
+                </small>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> 저장
+                </button>
+                <a href="{{ url_for('notices') }}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> 취소
+                </a>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 테스트 페이로드 힌트 -->
+    <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; font-size: 12px;">
+        <p><strong>🧪 Stored XSS 테스트 페이로드:</strong></p>
+        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">
+&lt;script&gt;alert('XSS')&lt;/script&gt;
+
+&lt;img src=x onerror="alert('XSS')"&gt;
+
+&lt;svg/onload=alert('XSS')&gt;
+
+&lt;body onload=alert('XSS')&gt;
+
+&lt;iframe src="javascript:alert('XSS')"&gt;&lt;/iframe&gt;
+        </pre>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

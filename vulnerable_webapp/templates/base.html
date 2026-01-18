@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 취약점: 불필요한 정보 노출 -->
+    <meta name="generator" content="VulnBank CMS v1.0">
+    <meta name="author" content="admin@vulnbank.com">
+    <title>{% block title %}VulnBank{% endblock %} - 믿음직한 온라인 뱅킹</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('index') }}" class="nav-logo">
+                <i class="fas fa-shield-alt"></i>
+                VulnBank
+            </a>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('index') }}"><i class="fas fa-home"></i> 홈</a></li>
+                {% if session.logged_in %}
+                    <li><a href="{{ url_for('dashboard') }}"><i class="fas fa-chart-line"></i> 대시보드</a></li>
+                    <li><a href="{{ url_for('transfer') }}"><i class="fas fa-exchange-alt"></i> 송금</a></li>
+                    <li><a href="{{ url_for('notices') }}"><i class="fas fa-bullhorn"></i> 공지사항</a></li>
+                    <li><a href="{{ url_for('profile') }}"><i class="fas fa-user"></i> 프로필</a></li>
+                    <li><a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> 로그아웃</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('login') }}"><i class="fas fa-sign-in-alt"></i> 로그인</a></li>
+                    <li><a href="{{ url_for('register') }}"><i class="fas fa-user-plus"></i> 회원가입</a></li>
+                {% endif %}
+            </ul>
+            <!-- 취약점: 검색 폼 (XSS) -->
+            <form action="{{ url_for('search') }}" method="GET" class="search-form">
+                <input type="text" name="q" placeholder="검색..." class="search-input">
+                <button type="submit" class="search-btn"><i class="fas fa-search"></i></button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for message in messages %}
+                        <div class="alert alert-info">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <h4><i class="fas fa-shield-alt"></i> VulnBank</h4>
+                <p>당신의 자산을 안전하게 지켜드립니다.</p>
+                <!-- 취약점: 내부 정보 노출 -->
+                <!-- 서버: Ubuntu 22.04, Apache 2.4.52, PHP 8.1 -->
+                <!-- DB: MariaDB 10.6.12 at 192.168.100.10 -->
+                <!-- 관리자 연락처: admin@vulnbank.com / 010-1234-5678 -->
+            </div>
+            <div class="footer-section">
+                <h4>빠른 링크</h4>
+                <ul>
+                    <li><a href="{{ url_for('index') }}">홈</a></li>
+                    <li><a href="{{ url_for('notices') }}">공지사항</a></li>
+                    <li><a href="/sitemap.xml">사이트맵</a></li>
+                    <!-- 취약점: 숨겨진 관리자 링크 -->
+                    <li style="display:none;"><a href="/admin">관리자</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>고객센터</h4>
+                <p><i class="fas fa-phone"></i> 1588-0000</p>
+                <p><i class="fas fa-envelope"></i> support@vulnbank.com</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 VulnBank. All rights reserved. | <a href="#">개인정보처리방침</a> | <a href="#">이용약관</a></p>
+            <!-- 취약점: 버전 정보 노출 -->
+            <p class="version">Version 1.0.3-beta (Build 2024.01.15)</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+

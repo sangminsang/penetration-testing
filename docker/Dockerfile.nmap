@@ -1,0 +1,30 @@
+# Nmap 스캐너 도커 이미지
+# 네트워크 포트 및 서비스 탐지를 수행합니다.
+
+FROM python:3.9-slim
+
+# 시스템 패키지 설치
+RUN apt-get update && apt-get install -y \
+    nmap \
+    && rm -rf /var/lib/apt/lists/*
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 의존성 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 앱 디렉토리 복사 (워커 스크립트가 app 모듈을 import하기 위해 필요)
+COPY app /app/app
+
+# 워커 스크립트 복사
+COPY docker/workers/nmap_worker.py /app/worker.py
+
+# PYTHONPATH 환경 변수 설정
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# 실행 명령 (unbuffered 모드로 출력 즉시 반영)
+CMD ["python", "-u", "/app/worker.py"]
+

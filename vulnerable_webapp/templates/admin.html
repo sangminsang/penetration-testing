@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}관리자 페이지{% endblock %}
+
+{% block content %}
+<div class="page-container admin-page">
+    <div class="page-header">
+        <h1><i class="fas fa-cog"></i> 관리자 페이지</h1>
+        <p>시스템 관리 및 모니터링</p>
+    </div>
+    
+    <!-- 관리자 메뉴 -->
+    <div class="admin-menu">
+        <a href="{{ url_for('server_status') }}?host=localhost" class="admin-menu-item">
+            <i class="fas fa-server"></i>
+            <span>서버 상태</span>
+        </a>
+        <a href="{{ url_for('dns_lookup') }}" class="admin-menu-item">
+            <i class="fas fa-globe"></i>
+            <span>DNS 조회</span>
+        </a>
+        <a href="{{ url_for('api_users') }}" class="admin-menu-item">
+            <i class="fas fa-database"></i>
+            <span>API: 사용자 목록</span>
+        </a>
+        <a href="{{ url_for('download') }}" class="admin-menu-item">
+            <i class="fas fa-download"></i>
+            <span>파일 다운로드</span>
+        </a>
+    </div>
+    
+    <!-- 사용자 목록 -->
+    <div class="content-card">
+        <h3><i class="fas fa-users"></i> 전체 사용자 목록</h3>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>아이디</th>
+                        <th>이메일</th>
+                        <th>잔액</th>
+                        <th>유형</th>
+                        <th>가입일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                        <tr>
+                            <td>{{ user['id'] }}</td>
+                            <td>
+                                <a href="{{ url_for('account', user_id=user['id']) }}">
+                                    {{ user['username'] }}
+                                </a>
+                            </td>
+                            <td>{{ user['email'] }}</td>
+                            <td>₩{{ "{:,.0f}".format(user['balance']) }}</td>
+                            <td>
+                                {% if user['is_admin'] %}
+                                    <span class="badge badge-admin">관리자</span>
+                                {% else %}
+                                    <span class="badge badge-user">일반</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user['created_at'][:10] if user['created_at'] else 'N/A' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 최근 거래 내역 -->
+    <div class="content-card">
+        <h3><i class="fas fa-exchange-alt"></i> 최근 거래 내역</h3>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>보낸 사람</th>
+                        <th>받는 사람</th>
+                        <th>금액</th>
+                        <th>메모</th>
+                        <th>일시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transactions %}
+                        <tr>
+                            <td>{{ t['id'] }}</td>
+                            <td>{{ t['from_user_id'] }}</td>
+                            <td>{{ t['to_user_id'] }}</td>
+                            <td>₩{{ "{:,.0f}".format(t['amount']) }}</td>
+                            <td>{{ t['memo'] | safe }}</td>
+                            <td>{{ t['created_at'] }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 취약점 힌트 -->
+    <div class="hint-box" style="margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 8px; font-size: 12px;">
+        <p><strong>🔓 관리자 페이지 접근 취약점:</strong></p>
+        <p>이 페이지는 쿠키 기반 인증을 사용합니다.</p>
+        <p>브라우저 개발자 도구에서 쿠키를 수정해보세요:</p>
+        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
+document.cookie = "user_role=admin"
+        </pre>
+        <p>그 후 <a href="/admin">/admin</a> 페이지를 새로고침하세요.</p>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

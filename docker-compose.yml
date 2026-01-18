@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  # MongoDB (NVD 데이터베이스용)
+  mongodb:
+    image: mongo:7
+    container_name: security-scanner-mongodb
+    # 외부 포트 매핑 제거 (Windows 포트 예약 문제로 인해)
+    # 컨테이너 내부 통신은 Docker 네트워크(mongodb:27017)를 통해 정상 작동
+    # ports:
+    #   - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - scanner-net
+    restart: unless-stopped
+
+  # Redis (실시간 업데이트용)
+  redis:
+    image: redis:7-alpine
+    container_name: security-scanner-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - scanner-net
+    restart: unless-stopped
+
+  # ZAP 프록시 서버 (ZAP 워커가 사용)
+  zap:
+    image: zaproxy/zap-stable:latest
+    container_name: security-scanner-zap
+    ports:
+      - "8080:8080"
+    # 명령어 인자를 리스트 형태로 변경하여 공백 처리 오류 방지
+    command:
+      - zap.sh
+      - -daemon
+      - -host
+      - 0.0.0.0
+      - -port
+      - "8080"
+      - -config
+      - "api.disablekey=true"
+      - -config
+      - "api.addrs.addr.name=.*"
+      - -config
+      - "api.addrs.addr.regex=true"
+    networks:
+      scanner-net:
+        ipv4_address: 172.18.0.5
+    restart: unless-stopped
+
+  # CVE Database (NVD 데이터 서비스용)
+  cve-db:
+    image: mongo:7
+    container_name: security-scanner-cve-db
+    volumes:
+      - cve-searchdockerversion_mongodb_data:/data/db
+    networks:
+      - scanner-net
+    restart: unless-stopped
+
+  # CVE-Search API (NVD 데이터 검색 엔진)
+  cve-search:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cve
+    container_name: security-scanner-cve-search
+    # 외부 포트 매핑 제거 (내부 네트워크만 사용, web 서비스가 호출)
+    # ports:
+    #   - "5000:5000"
+    environment:
+      - MONGO_HOST=cve-db
+      - MONGO_PORT=27017
+      - MONGODB_HOST=cve-db
+      - MONGODB_PORT=27017
+      - NVD_NIST_API_KEY=fe4669a1-c66f-4058-bc9e-5440b5919e2f
+    depends_on:
+      - cve-db
+    networks:
+      scanner-net:
+        ipv4_address: 172.18.0.6
+    restart: unless-stopped
+
+  # Flask 애플리케이션
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: security-scanner-web
+    ports:
+      - "5000:5000"  # 웹 서비스는 외부 포트 5000 사용
+    volumes:
+      - ./scan_results:/app/scan_results
+      - ./data:/app/data
+      # Docker 소켓 마운트 (워커 컨테이너 실행을 위해)
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MONGO_HOST=mongodb
+      - REDIS_HOST=redis
+      - ZAP_PROXY_HOST=172.18.0.5
+      - ZAP_PROXY_PORT=8080
+      - CVE_SEARCH_HOST=security-scanner-cve-search
+      - CVE_SEARCH_PORT=5000
+      - CVE_SEARCH_URL=http://172.18.0.6:5000
+      - NO_PROXY=security-scanner-cve-search,172.18.0.5,172.18.0.6,localhost,127.0.0.1
+      # Docker-in-Docker 환경에서 워커 컨테이너에 호스트 경로 전달을 위한 환경 변수
+      - HOST_PWD=${PWD}
+    depends_on:
+      - mongodb
+      - redis
+      - zap
+      - cve-search
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Windows/Mac에서 호스트 머신 접근을 위한 설정
+    networks:
+      - scanner-net
+    restart: unless-stopped
+
+  # Vulnerable Web Application (스캔 대상)
+  vulnerable-webapp:
+    build:
+      context: ./vulnerable_webapp
+      dockerfile: Dockerfile
+    container_name: vulnerable-webapp
+    ports:
+      - "5001:5000"  # 호스트 5001 포트로 접근 (기존 web 서비스와 충돌 방지)
+    volumes:
+      - ./vulnerable_webapp/uploads:/app/uploads
+      - ./vulnerable_webapp/vulnbank.db:/app/vulnbank.db
+      - ./vulnerable_webapp/documents:/app/documents
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    networks:
+      scanner-net:
+        ipv4_address: 172.18.0.10  # 고정 IP 할당 (스캔 시 사용)
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  redis_data:
+  cve-searchdockerversion_mongodb_data:
+    external: true  # 외부 볼륨 (기존 NVD 데이터)
+
+networks:
+  scanner-net:
+    name: security-scanner-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+

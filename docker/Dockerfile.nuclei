@@ -1,0 +1,59 @@
+# Nuclei 스캐너 도커 이미지
+# Katana로 URL을 수집하고 Nuclei로 취약점을 탐지합니다.
+
+FROM python:3.9-slim
+
+# 시스템 패키지 설치
+RUN apt-get update && apt-get install -y \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Nuclei 설치
+RUN wget https://github.com/projectdiscovery/nuclei/releases/download/v3.3.5/nuclei_3.3.5_linux_amd64.zip \
+    && unzip -o nuclei_3.3.5_linux_amd64.zip \
+    && mv nuclei /usr/local/bin/ \
+    && rm nuclei_3.3.5_linux_amd64.zip \
+    && chmod +x /usr/local/bin/nuclei
+
+# Katana 설치
+RUN wget https://github.com/projectdiscovery/katana/releases/download/v1.1.0/katana_1.1.0_linux_amd64.zip \
+    && unzip -o katana_1.1.0_linux_amd64.zip \
+    && mv katana /usr/local/bin/ \
+    && rm katana_1.1.0_linux_amd64.zip \
+    && chmod +x /usr/local/bin/katana
+
+# Nuclei 템플릿 다운로드 및 설정 (이전 프로젝트 로직 강제 이식)
+# 3-1. Nuclei 템플릿 다운로드 (스캔 결과 생성을 위해 필수)
+# Nuclei는 기본 경로 ~/.config/nuclei/templates를 사용하므로 여기에 템플릿 복사
+RUN mkdir -p /root/.config/nuclei \
+    && nuclei -version \
+    && echo "Updating Nuclei templates..." \
+    && nuclei -update-templates 2>&1 \
+    && echo "Copying templates to default location..." \
+    && (test -d /root/nuclei-templates && cp -r /root/nuclei-templates /root/.config/nuclei/templates || true) \
+    && nuclei -version \
+    && echo "Checking template directory..." \
+    && (test -d /root/.config/nuclei/templates && ls -la /root/.config/nuclei/templates | head -5 || echo "⚠️ Templates not in default path") \
+    && echo "✅ Nuclei templates installed at /root/.config/nuclei/templates"
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 의존성 설치
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 앱 디렉토리 복사 (워커 스크립트가 app 모듈을 import하기 위해 필요)
+COPY app /app/app
+
+# 워커 스크립트 복사
+COPY docker/workers/nuclei_worker.py /app/worker.py
+
+# PYTHONPATH 환경 변수 설정
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# 실행 명령 (unbuffered 모드로 출력 즉시 반영)
+CMD ["python", "-u", "/app/worker.py"]
+

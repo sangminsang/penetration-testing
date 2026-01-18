@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}오류{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="error-page">
+        <div class="error-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h1>오류가 발생했습니다</h1>
+        
+        <!-- 취약점: 상세한 에러 정보 노출 -->
+        <div class="error-details">
+            <p class="error-message">{{ error }}</p>
+            
+            {% if path %}
+                <p class="error-path">
+                    <strong>요청 경로:</strong> {{ path }}
+                </p>
+            {% endif %}
+            
+            {% if trace %}
+                <!-- 취약점: 스택 트레이스 노출 -->
+                <div class="error-trace">
+                    <h3>스택 트레이스 (디버그 정보)</h3>
+                    <pre>{{ trace }}</pre>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="error-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                <i class="fas fa-home"></i> 홈으로 돌아가기
+            </a>
+            <a href="javascript:history.back()" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> 이전 페이지
+            </a>
+        </div>
+        
+        <!-- 정보 노출 힌트 -->
+        <div class="hint-box" style="margin-top: 30px; padding: 15px; background: #f8d7da; border-radius: 8px; font-size: 12px;">
+            <p><strong>⚠️ 정보 노출 취약점:</strong></p>
+            <p>에러 페이지에서 다음 정보가 노출됩니다:</p>
+            <ul style="margin-left: 20px;">
+                <li>상세한 에러 메시지</li>
+                <li>파일 경로 정보</li>
+                <li>스택 트레이스 (디버그 모드)</li>
+                <li>서버 기술 스택 정보</li>
+            </ul>
+            <p style="margin-top: 10px;">
+                공격자는 이 정보를 이용해 추가 공격을 계획할 수 있습니다.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+

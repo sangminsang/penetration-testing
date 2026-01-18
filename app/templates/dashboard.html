@@ -1,0 +1,3293 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - 대시보드{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- 데이터 컨테이너 (JavaScript에서 안전하게 읽기 위해) -->
+<div id="data-container" 
+     data-project-id="{{ project.id }}" 
+     data-project-target-url="{{ project.target_url }}"
+     style="display: none;"></div>
+
+<div class="dashboard-header mb-4">
+    <h1 class="h3 mb-1">
+        <i class="fas fa-chart-line me-2"></i>{{ project.name }}
+    </h1>
+    <p class="text-muted mb-0">
+        <i class="fas fa-link me-1"></i>타겟 URL: <strong>{{ project.target_url }}</strong>
+        {% if last_scan %}
+        <span class="ms-3">
+            <i class="fas fa-clock me-1"></i>마지막 스캔: {{ last_scan.timestamp.strftime('%Y-%m-%d %H:%M') }}
+        </span>
+        {% endif %}
+    </p>
+</div>
+
+<div class="dashboard-controls mb-4">
+    <div class="d-flex align-items-center gap-3">
+        {% if scan_history %}
+        <div class="flex-grow-1">
+            <label for="scan-history-select" class="form-label text-muted mb-1" style="font-size: 0.875rem;">스캔 이력 선택</label>
+            <select id="scan-history-select" class="form-select form-select-sm">
+                {% for history in scan_history %}
+                <option value="{{ history.timestamp }}" {% if history.timestamp == selected_timestamp or (not selected_timestamp and loop.first) %}selected{% endif %}>
+                    {{ history.display_name }} {% if history.has_report %}(리포트 있음){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- AI 요약 카드 (우측 상단) - 항상 렌더링 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-slate-800 border-slate-700" id="ai-summary-card" style="display: none;">
+            <div class="card-header bg-slate-700 border-slate-600">
+                <h5 class="mb-0 text-white">
+                    <i class="fas fa-link me-2"></i>공격 체인 요약
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="ai-summary-content" class="text-slate-200"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 요약 카드 섹션 - 항상 렌더링 -->
+<div class="row mb-4" id="summary-cards">
+    <div class="col-md-3 mb-3">
+        <div class="card summary-card card-total h-100">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 text-muted">전체 취약점</h6>
+                        <h2 class="card-title mb-0" id="summary-total">0</h2>
+                        <small class="text-muted">Critical + High + Medium</small>
+                    </div>
+                    <div class="icon-circle bg-primary flex-shrink-0">
+                        <i class="fas fa-bug"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card summary-card card-critical h-100">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 text-muted">위험 취약점</h6>
+                        <h2 class="card-title mb-0" id="summary-critical">0</h2>
+                        <small class="text-muted">High + Critical</small>
+                    </div>
+                    <div class="icon-circle bg-danger flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card summary-card card-infra h-100">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 text-muted">인프라 버전</h6>
+                        <h2 class="card-title mb-0" id="summary-infra" style="font-size: 1.25rem; line-height: 1.3; word-break: break-word;">-</h2>
+                    </div>
+                    <div class="icon-circle bg-info flex-shrink-0">
+                        <i class="fas fa-server"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card summary-card card-target h-100">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center flex-grow-1">
+                    <div class="flex-grow-1">
+                        <h6 class="card-subtitle mb-2 text-muted">타겟 IP</h6>
+                        <h2 class="card-title mb-0" id="summary-target" style="font-size: 1.25rem;">-</h2>
+                    </div>
+                    <div class="icon-circle bg-success flex-shrink-0">
+                        <i class="fas fa-network-wired"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 시각화 섹션 - 도구별 위험도 분포 -->
+<div class="row mb-4">
+    <div class="col-12 col-md-4 mb-4">
+        <div class="card chart-card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>ZAP 위험도 분포</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="zapSeverityChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4 mb-4">
+        <div class="card chart-card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Nmap 위험도 분포</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="nmapSeverityChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4 mb-4">
+        <div class="card chart-card">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Nuclei 위험도 분포</h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="excludeNucleiInfoLow" 
+                           onchange="excludeNucleiInfoLow = this.checked; updateNucleiSeverityChart();">
+                    <label class="form-check-label" for="excludeNucleiInfoLow" style="font-size: 0.85rem; color: rgba(255,255,255,0.8);">
+                        Info/Low 제외
+                    </label>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="nucleiSeverityChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CVE 매칭 데이터 및 CWE 상세 정보 섹션 -->
+<div class="row mb-4">
+    <!-- 왼쪽: CVE 매칭 데이터 -->
+    <div class="col-12 col-lg-6 mb-4 d-flex">
+        <div class="card w-100 d-flex flex-column">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>CVE 매칭 데이터</h5>
+            </div>
+            <div class="card-body flex-grow-1 d-flex flex-column" style="min-height: 600px;">
+                <!-- 심각도별 탭 -->
+                <ul class="nav nav-tabs mb-3 flex-wrap" id="cveSeverityTabs" role="tablist" style="border-bottom: 1px solid #dee2e6;">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="cve-tab-all" data-bs-toggle="tab" data-bs-target="#cve-tab-pane-all" type="button" role="tab" onclick="filterCveBySeverity('all')">
+                            전체 <span class="badge bg-secondary" id="cve-count-all">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cve-tab-critical" data-bs-toggle="tab" data-bs-target="#cve-tab-pane-critical" type="button" role="tab" onclick="filterCveBySeverity('critical')">
+                            Critical <span class="badge bg-danger" id="cve-count-critical">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cve-tab-high" data-bs-toggle="tab" data-bs-target="#cve-tab-pane-high" type="button" role="tab" onclick="filterCveBySeverity('high')">
+                            High <span class="badge bg-warning text-dark" id="cve-count-high">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cve-tab-medium" data-bs-toggle="tab" data-bs-target="#cve-tab-pane-medium" type="button" role="tab" onclick="filterCveBySeverity('medium')">
+                            Medium <span class="badge bg-info" id="cve-count-medium">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cve-tab-low" data-bs-toggle="tab" data-bs-target="#cve-tab-pane-low" type="button" role="tab" onclick="filterCveBySeverity('low')">
+                            Low <span class="badge bg-success" id="cve-count-low">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cve-tab-info" data-bs-toggle="tab" data-bs-target="#cve-tab-pane-info" type="button" role="tab" onclick="filterCveBySeverity('info')">
+                            Info <span class="badge bg-secondary" id="cve-count-info">0</span>
+                        </button>
+                    </li>
+                </ul>
+                <div class="table-responsive flex-grow-1">
+                    <table id="cveMatchingTable" class="table table-striped table-hover table-dark" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>CVE ID</th>
+                                <th>심각도</th>
+                                <th>CVSS</th>
+                                <th>영향받는 패키지</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cveMatchingTableBody">
+                            <!-- JavaScript로 동적 생성 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="cveMatchingPagination" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+                    <div>
+                        <span class="text-muted" id="cveMatchingInfo">표시 중: 0-0 / 전체: 0</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" id="cveMatchingPrevBtn" onclick="changeCvePage(-1)" disabled>이전</button>
+                        <span class="align-self-center text-muted" id="cveMatchingPageInfo">1 / 1</span>
+                        <button class="btn btn-sm btn-outline-secondary" id="cveMatchingNextBtn" onclick="changeCvePage(1)" disabled>다음</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 오른쪽: 매칭된 상세 CWE 정보 -->
+    <div class="col-12 col-lg-6 mb-4 d-flex">
+        <div class="card w-100 d-flex flex-column">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-list-alt me-2"></i>매칭된 상세 CWE 정보</h5>
+            </div>
+            <div class="card-body flex-grow-1 d-flex flex-column" style="min-height: 600px;">
+                <div id="cweDetailsContainer" class="flex-grow-1" style="overflow-y: auto; max-height: none;">
+                    <!-- CWE 카드들이 동적으로 생성됨 -->
+                </div>
+                <div id="cweDetailsPagination" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+                    <div>
+                        <span class="text-muted" id="cweDetailsInfo">표시 중: 0-0 / 전체: 0</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" id="cweDetailsPrevBtn" onclick="changeCwePage(-1)" disabled>이전</button>
+                        <span class="align-self-center text-muted" id="cweDetailsPageInfo">1 / 1</span>
+                        <button class="btn btn-sm btn-outline-secondary" id="cweDetailsNextBtn" onclick="changeCwePage(1)" disabled>다음</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 전문가 탭 섹션 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-slate-800 border-slate-700">
+            <div class="card-header bg-slate-700 border-slate-600">
+                <!-- 탭 네비게이션 -->
+                <ul class="nav nav-tabs nav-tabs-custom" id="expertTabs" role="tablist">
+                    <li class="nav-item" role="presentation" style="flex: 1; text-align: center;">
+                        <button class="nav-link active" id="infra-recon-tab" data-bs-toggle="tab" data-bs-target="#infra-recon-content" type="button" role="tab" style="width: 100%;">
+                            <i class="fas fa-network-wired me-2"></i>인프라 & 정찰 정보
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation" style="flex: 1; text-align: center;">
+                        <button class="nav-link" id="ai-report-tab" data-bs-toggle="tab" data-bs-target="#ai-report-content" type="button" role="tab" style="width: 100%;">
+                            <i class="fas fa-robot me-2"></i>AI 정밀 리포트
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body bg-slate-800">
+                <!-- 탭 컨텐츠 -->
+                <div class="tab-content" id="expertTabContent">
+                    <!-- 탭 1: 인프라 & 정찰 정보 -->
+                    <div class="tab-pane fade show active" id="infra-recon-content" role="tabpanel">
+                        <!-- Nmap 인프라 서비스 맵 -->
+                        <div class="mb-4">
+                            <h6 class="text-white mb-3"><i class="fas fa-server me-2"></i>인프라 서비스 맵</h6>
+                            <div id="infrastructure-grid" class="row g-3">
+                                <!-- JavaScript로 동적 생성 -->
+                            </div>
+                        </div>
+                        
+                        <!-- Katana 탐색된 엔드포인트 -->
+                        <div class="mt-4">
+                            <h6 class="text-white mb-3"><i class="fas fa-sitemap me-2"></i>탐색된 엔드포인트</h6>
+                            <div class="table-responsive">
+                                <table id="endpointsTable" class="table table-striped table-hover table-dark" style="width:100%">
+                                    <thead>
+                                        <tr>
+                                            <th>URL</th>
+                                            <th>Method</th>
+                                            <th>Status</th>
+                                            <th>Tech Stack</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- JavaScript로 동적 생성 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 탭 2: AI 정밀 리포트 -->
+                    <div class="tab-pane fade" id="ai-report-content" role="tabpanel">
+                        <div id="ai-report-display" class="ai-report-content" style="background-color: var(--slate-800); color: var(--slate-200); padding: 1.5rem; border-radius: 0.5rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CWE 취약점 목록 모달 -->
+<div class="modal fade" id="cweVulnerabilitiesModal" tabindex="-1" aria-labelledby="cweVulnerabilitiesModalLabel" aria-hidden="true" style="background-color: rgba(0, 0, 0, 0.5) !important;">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content bg-slate-800 border-slate-700" style="background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+            <div class="modal-header bg-slate-700 border-slate-600" style="background-color: var(--slate-700) !important; border-color: var(--slate-600) !important;">
+                <h5 class="modal-title text-white" id="cweVulnerabilitiesModalLabel">
+                    <i class="fas fa-bug me-2"></i>CWE 취약점 목록
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: var(--slate-800) !important; color: var(--slate-200) !important;">
+                <div id="cweVulnerabilitiesContent" style="background-color: transparent !important;">
+                    <!-- 동적으로 채워짐 -->
+                </div>
+            </div>
+            <div class="modal-footer bg-slate-700 border-slate-600" style="background-color: var(--slate-700) !important; border-color: var(--slate-600) !important;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CVE 상세 정보 모달 -->
+<div class="modal fade" id="cveDetailModal" tabindex="-1" aria-labelledby="cveDetailModalLabel" aria-hidden="true" style="background-color: rgba(0, 0, 0, 0.5) !important;">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-slate-800 border-slate-700" style="background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+            <div class="modal-header bg-slate-700 border-slate-600" style="background-color: var(--slate-700) !important; border-color: var(--slate-600) !important;">
+                <h5 class="modal-title text-white" id="cveDetailModalLabel">
+                    <i class="fas fa-shield-alt me-2"></i>CVE 상세 정보
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: var(--slate-800) !important; color: var(--slate-200) !important;">
+                <div id="cveDetailContent" style="background-color: transparent !important;">
+                    <!-- 동적으로 채워짐 -->
+                </div>
+            </div>
+            <div class="modal-footer bg-slate-700 border-slate-600" style="background-color: var(--slate-700) !important; border-color: var(--slate-600) !important;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <a id="nvdLink" href="#" target="_blank" class="btn btn-primary">
+                    <i class="fas fa-external-link-alt me-2"></i>NVD에서 보기
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 취약점 상세 모달 -->
+<div class="modal fade" id="vulnerabilityModal" tabindex="-1" aria-labelledby="vulnerabilityModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-slate-800 border-slate-700">
+            <div class="modal-header bg-slate-700 border-slate-600">
+                <h5 class="modal-title text-white" id="vulnerabilityModalLabel">
+                    <i class="fas fa-bug me-2"></i>취약점 상세 정보
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: var(--slate-800) !important; color: var(--slate-200) !important;">
+                <div id="modal-vulnerability-name" class="mb-3">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;">이름</h6>
+                    <p id="modal-name" class="mb-0" style="color: var(--slate-200) !important;"></p>
+                </div>
+                <div id="modal-vulnerability-severity" class="mb-3">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;">위험도</h6>
+                    <p id="modal-severity" class="mb-0"></p>
+                </div>
+                <div id="modal-vulnerability-confidence" class="mb-3">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;">신뢰도 (Confidence)</h6>
+                    <p id="modal-confidence" class="mb-0" style="color: var(--slate-200) !important;"></p>
+                </div>
+                <div id="modal-vulnerability-evidence" class="mb-3">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;">증거 (Evidence)</h6>
+                    <pre id="modal-evidence" class="p-3 rounded" style="background-color: var(--slate-900) !important; color: var(--slate-100) !important; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+                </div>
+                <div id="modal-vulnerability-solution" class="mb-3">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;">해결 방안 (Solution)</h6>
+                    <p id="modal-solution" class="mb-0" style="color: var(--slate-200) !important;"></p>
+                </div>
+                <div id="modal-vulnerability-url" class="mb-3">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;">URL</h6>
+                    <p id="modal-url" class="mb-0"><a id="modal-url-link" href="#" target="_blank" style="color: var(--primary-blue) !important;"></a></p>
+                </div>
+                <!-- 탈취 데이터 표시 섹션 (동적 표시) -->
+                <div id="modal-extracted-data" class="mb-3" style="display: none;">
+                    <h6 style="color: var(--slate-100) !important; font-weight: 600;" class="mb-3">
+                        <i class="fas fa-database me-2"></i>탈취 데이터
+                    </h6>
+                    <div id="extracted-data-content"></div>
+                </div>
+            </div>
+            <div class="modal-footer bg-slate-700 border-slate-600">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 데이터 없음 메시지 (JavaScript에서 동적으로 표시/숨김 처리) -->
+<div id="no-data-message" class="alert alert-info" style="display: none;">
+    <i class="fas fa-info-circle me-2"></i>
+    아직 스캔 결과가 없습니다. 프로젝트 목록에서 스캔 버튼을 클릭하여 스캔을 시작하세요.
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // data-attribute에서 안전하게 데이터 읽기
+    const dataContainer = document.getElementById('data-container');
+    const projectId = parseInt(dataContainer.dataset.projectId, 10);
+    const projectTargetUrl = dataContainer.dataset.projectTargetUrl;
+    
+    const socket = io();
+    
+    // ========== 전역 변수 선언 (API를 통해 로드) ==========
+    // API 호출 후에만 값이 할당됨
+    let scanData = null;
+    let aiReportMd = null;
+    
+    // ========== 전역 변수 선언 (한 번만 선언) ==========
+    let vulnerabilitiesTable = null;
+    let endpointsTable = null;
+    let zapSeverityChart = null;
+    let nmapSeverityChart = null;
+    let nucleiSeverityChart = null;
+    
+    // 렌더링 상태 추적
+    let renderingState = {
+        cardsDone: false,
+        zapChartDone: false,
+        nmapChartDone: false,
+        nucleiChartDone: false,
+        tableDone: false,
+        infraGridDone: false,
+        endpointsTableDone: false,
+        aiSummaryDone: false
+    };
+    
+    // ========== 초기화 로그 ==========
+    console.log('✅ [초기화] 스크립트 시작 - API 기반 데이터 로딩');
+    
+    // 데이터 부재 시 메시지 표시
+    function showNoDataMessage() {
+        // 요약 카드 섹션에 메시지 표시
+        const summaryCards = document.getElementById('summary-cards');
+        if (summaryCards) {
+            summaryCards.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        데이터를 불러오는 중이거나 결과가 없습니다. 스캔이 완료될 때까지 기다려주세요.
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 데이터 없음 메시지 표시
+        const noDataMessage = document.getElementById('no-data-message');
+        if (noDataMessage) {
+            noDataMessage.style.display = 'block';
+        }
+    }
+    
+    // 요약 카드 업데이트 (즉시 실행, 가벼운 작업)
+    function updateSummaryCards() {
+        if (renderingState.cardsDone) {
+            console.log('⏭️ [요약 카드] 이미 완료됨, 스킵');
+            return;
+        }
+        if (!scanData) {
+            console.warn('⚠️ [요약 카드] scanData 없음');
+            return;
+        }
+        console.log('🔄 [요약 카드] 초기화 시작');
+        
+        const vulnerabilities = scanData.vulnerabilities || [];
+        const infrastructure = scanData.infrastructure || {};
+        const summary = scanData.summary || {};
+        
+        // 전체 취약점 수 (Info/Low 제외 - Critical, High, Medium만 카운트)
+        let totalVulns = 0;
+        for (let i = 0; i < vulnerabilities.length; i++) {
+            const severity = (vulnerabilities[i].severity || '').toLowerCase();
+            // Critical, High, Medium만 카운트 (Info, Low 제외)
+            if (severity === 'critical' || severity === 'high' || severity === 'medium') {
+                totalVulns++;
+            }
+        }
+        const totalEl = document.getElementById('summary-total');
+        if (totalEl) totalEl.textContent = totalVulns.toLocaleString();
+        
+        // 위험 취약점 수 (High + Critical만) - 최적화: 한 번만 순회
+        let criticalCount = 0;
+        for (let i = 0; i < vulnerabilities.length; i++) {
+            const severity = (vulnerabilities[i].severity || '').toLowerCase();
+            if (severity === 'high' || severity === 'critical') {
+                criticalCount++;
+            }
+        }
+        const criticalEl = document.getElementById('summary-critical');
+        if (criticalEl) criticalEl.textContent = criticalCount.toLocaleString();
+        
+        // 인프라 버전
+        const services = infrastructure.services || [];
+        let infraVersion = '-';
+        if (services.length > 0) {
+            const firstService = services[0];
+            if (firstService.product && firstService.version) {
+                infraVersion = `${firstService.product} ${firstService.version}`;
+            } else if (firstService.product) {
+                infraVersion = firstService.product;
+            }
+        }
+        const infraEl = document.getElementById('summary-infra');
+        if (infraEl) infraEl.textContent = infraVersion;
+        
+        // 타겟 IP
+        const ipAddresses = infrastructure.ip_addresses || [];
+        const targetIP = ipAddresses.length > 0 ? ipAddresses[0] : '-';
+        const targetEl = document.getElementById('summary-target');
+        if (targetEl) targetEl.textContent = targetIP;
+        
+        renderingState.cardsDone = true;
+        console.log('✅ [요약 카드] 완료');
+    }
+    
+    // 위험도 분포 집계 헬퍼 함수
+    function calculateSeverityCounts(vulnerabilities, sourceFilter = null) {
+        const severityCounts = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+            info: 0
+        };
+        
+        for (let i = 0; i < vulnerabilities.length; i++) {
+            const vuln = vulnerabilities[i];
+            
+            // 소스 필터링
+            if (sourceFilter) {
+                const source = (vuln.source || vuln.sources?.[0] || '').toLowerCase();
+                if (source !== sourceFilter.toLowerCase()) {
+                    continue;
+                }
+            }
+            
+            // severity 값 정규화 (괄호 및 숫자 제거)
+            let severity = (vuln.severity || 'info').toLowerCase();
+            // "CRITICAL (9.8)" -> "critical", "HIGH (7.5)" -> "high" 변환
+            severity = severity.split('(')[0].trim();
+            
+            if (severityCounts.hasOwnProperty(severity)) {
+                severityCounts[severity]++;
+            } else {
+                severityCounts.info++;
+            }
+        }
+        
+        return severityCounts;
+    }
+    
+    // ZAP 위험도 분포 계산 (등급을 한 단계씩 올림: High → Critical, Medium → High, Low → Medium, Info → Low)
+    function calculateZAPSeverityCounts(vulnerabilities) {
+        const severityCounts = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+            info: 0
+        };
+        
+        for (let i = 0; i < vulnerabilities.length; i++) {
+            const vuln = vulnerabilities[i];
+            
+            // ZAP 소스만 필터링
+            const source = (vuln.source || vuln.sources?.[0] || '').toLowerCase();
+            if (source !== 'zap') {
+                continue;
+            }
+            
+            // severity 값 정규화 (괄호 및 숫자 제거)
+            let severity = (vuln.severity || 'info').toLowerCase();
+            severity = severity.split('(')[0].trim();
+            
+            // ZAP 등급을 한 단계씩 올림
+            // High → Critical
+            // Medium → High
+            // Low → Medium
+            // Info → Low
+            if (severity === 'high') {
+                severityCounts.critical++;
+            } else if (severity === 'medium') {
+                severityCounts.high++;
+            } else if (severity === 'low') {
+                severityCounts.medium++;
+            } else if (severity === 'info' || severity === 'informational') {
+                severityCounts.low++;
+            } else {
+                // 기타는 Low로 처리
+                severityCounts.low++;
+            }
+        }
+        
+        return severityCounts;
+    }
+    
+    // ZAP 위험도 분포 차트 초기화
+    function initializeZAPSeverityChart() {
+        if (zapSeverityChart !== null) {
+            console.log('⏭️ [ZAP 차트] 이미 초기화됨, 스킵');
+            return;
+        }
+        if (!scanData || !scanData.vulnerabilities) {
+            console.warn('⚠️ [ZAP 차트] 데이터 없음');
+            return;
+        }
+        console.log('🔄 [ZAP 차트] 초기화 시작');
+        
+        const vulnerabilities = scanData.vulnerabilities;
+        // ZAP 심각도를 한 단계씩 올려서 계산 (High → Critical, Medium → High, Low → Medium, Info → Low)
+        const severityCounts = calculateZAPSeverityCounts(vulnerabilities);
+        
+        // 모든 카운트가 0인지 확인 - 취약점이 발견되지 않은 경우
+        const total = severityCounts.critical + severityCounts.high + severityCounts.medium + severityCounts.low + severityCounts.info;
+        if (total === 0) {
+            const chartContainer = document.getElementById('zapSeverityChart');
+            if (chartContainer && chartContainer.parentElement) {
+                chartContainer.parentElement.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <p class="text-muted">취약점이 발견되지 않았습니다.</p>
+                    </div>
+                `;
+            }
+            renderingState.zapChartDone = true;
+            console.log('✅ [ZAP 차트] 취약점 없음');
+            return;
+        }
+        
+        const ctx = document.getElementById('zapSeverityChart');
+        if (ctx) {
+            // 퍼센트 계산
+            const total = severityCounts.critical + severityCounts.high + severityCounts.medium + severityCounts.low + severityCounts.info;
+            const getPercentage = (count) => total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+            
+            const labels = [
+                `Critical (${getPercentage(severityCounts.critical)}%)`,
+                `High (${getPercentage(severityCounts.high)}%)`,
+                `Medium (${getPercentage(severityCounts.medium)}%)`,
+                `Low (${getPercentage(severityCounts.low)}%)`,
+                `Info (${getPercentage(severityCounts.info)}%)`
+            ];
+            
+            zapSeverityChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: [
+                            severityCounts.critical,
+                            severityCounts.high,
+                            severityCounts.medium,
+                            severityCounts.low,
+                            severityCounts.info
+                        ],
+                        backgroundColor: [
+                            '#dc3545', // Critical - 빨강
+                            '#fd7e14', // High - 주황
+                            '#ffc107', // Medium - 노랑
+                            '#0dcaf0', // Low - 청록
+                            '#6c757d'  // Info - 회색
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        },
+                        tooltip: {
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const percentage = getPercentage(value);
+                                    return `${label.split(' (')[0]}: ${value}개 (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            renderingState.zapChartDone = true;
+            console.log('✅ [ZAP 차트] 완료');
+        }
+    }
+    
+    // Nmap 위험도 분포 차트 초기화 (CVSS 기반 - infrastructure_vulnerabilities 사용)
+    function initializeNmapSeverityChart() {
+        if (nmapSeverityChart !== null) {
+            console.log('⏭️ [Nmap 차트] 이미 초기화됨, 스킵');
+            return;
+        }
+        if (!scanData) {
+            console.warn('⚠️ [Nmap 차트] 데이터 없음');
+            return;
+        }
+        console.log('🔄 [Nmap 차트] 초기화 시작 (CVSS 기반)');
+        
+        // Nmap은 포트 스캔만 수행하므로 infrastructure_vulnerabilities의 CVSS 점수를 사용
+        const infraVulns = scanData.infrastructure_vulnerabilities || [];
+        
+        // 빈 데이터 확인 - CVE 매칭 데이터가 없는 경우
+        if (infraVulns.length === 0) {
+            const chartContainer = document.getElementById('nmapSeverityChart');
+            if (chartContainer && chartContainer.parentElement) {
+                chartContainer.parentElement.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <p class="text-muted mb-2">CVE 매칭 데이터가 없습니다.</p>
+                        <small class="text-muted">Nmap 스캔 결과를 기반으로 CVE 매칭이 수행되지 않았거나,<br>매칭된 CVE가 없습니다.</small>
+                    </div>
+                `;
+            }
+            renderingState.nmapChartDone = true;
+            console.log('ℹ️ [Nmap 차트] CVE 매칭 데이터 없음');
+            return;
+        }
+        
+        const severityCounts = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+            info: 0
+        };
+        
+        infraVulns.forEach(vuln => {
+            const cvssScore = vuln.nvd_data?.cvss_score || 0.0;
+            let severity = 'info';
+            
+            if (cvssScore >= 9.0) severity = 'critical';
+            else if (cvssScore >= 7.0) severity = 'high';
+            else if (cvssScore >= 4.0) severity = 'medium';
+            else if (cvssScore > 0) severity = 'low';
+            
+            if (severityCounts.hasOwnProperty(severity)) {
+                severityCounts[severity]++;
+            }
+        });
+        
+        // 모든 카운트가 0인지 확인 - 취약점이 발견되지 않은 경우
+        const total = severityCounts.critical + severityCounts.high + severityCounts.medium + severityCounts.low + severityCounts.info;
+        if (total === 0) {
+            const chartContainer = document.getElementById('nmapSeverityChart');
+            if (chartContainer && chartContainer.parentElement) {
+                chartContainer.parentElement.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <p class="text-muted">취약점이 발견되지 않았습니다.</p>
+                    </div>
+                `;
+            }
+            renderingState.nmapChartDone = true;
+            console.log('✅ [Nmap 차트] 취약점 없음');
+            return;
+        }
+        
+        const ctx = document.getElementById('nmapSeverityChart');
+        if (ctx) {
+            // 퍼센트 계산
+            const getPercentage = (count) => total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+            
+            const labels = [
+                `Critical (${getPercentage(severityCounts.critical)}%)`,
+                `High (${getPercentage(severityCounts.high)}%)`,
+                `Medium (${getPercentage(severityCounts.medium)}%)`,
+                `Low (${getPercentage(severityCounts.low)}%)`,
+                `Info (${getPercentage(severityCounts.info)}%)`
+            ];
+            
+            nmapSeverityChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: [
+                            severityCounts.critical,
+                            severityCounts.high,
+                            severityCounts.medium,
+                            severityCounts.low,
+                            severityCounts.info
+                        ],
+                        backgroundColor: [
+                            '#dc3545', // Critical - 빨강
+                            '#fd7e14', // High - 주황
+                            '#ffc107', // Medium - 노랑
+                            '#0dcaf0', // Low - 청록
+                            '#6c757d'  // Info - 회색
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        },
+                        tooltip: {
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const percentage = getPercentage(value);
+                                    return `${label.split(' (')[0]}: ${value}개 (${percentage}%)`;
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'CVE 매칭 기반 (CVSS 점수)',
+                            font: { size: 11 },
+                            color: '#ffffff'
+                        }
+                    }
+                }
+            });
+            
+            renderingState.nmapChartDone = true;
+            console.log('✅ [Nmap 차트] 완료 (CVSS 기반)');
+        }
+    }
+    
+    // Nuclei 위험도 분포 차트 초기화 (CVE 매칭 우선, Info/Low 필터링 지원)
+    let excludeNucleiInfoLow = false;  // 전역 변수로 필터 상태 관리
+    
+    function initializeNucleiSeverityChart() {
+        if (nucleiSeverityChart !== null) {
+            console.log('⏭️ [Nuclei 차트] 이미 초기화됨, 업데이트');
+            updateNucleiSeverityChart();
+            return;
+        }
+        if (!scanData || !scanData.vulnerabilities) {
+            console.warn('⚠️ [Nuclei 차트] 데이터 없음');
+            return;
+        }
+        console.log('🔄 [Nuclei 차트] 초기화 시작 (CVE 매칭 우선)');
+        
+        const severityCounts = calculateNucleiSeverityCounts(excludeNucleiInfoLow);
+        
+        // 모든 카운트가 0인지 확인 - 취약점이 발견되지 않은 경우
+        const total = severityCounts.critical + severityCounts.high + severityCounts.medium + severityCounts.low + severityCounts.info;
+        if (total === 0) {
+            const chartContainer = document.getElementById('nucleiSeverityChart');
+            if (chartContainer && chartContainer.parentElement) {
+                chartContainer.parentElement.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <p class="text-muted">취약점이 발견되지 않았습니다.</p>
+                        ${excludeNucleiInfoLow ? '<small class="text-muted">(Info/Low 등급 제외됨)</small>' : ''}
+                    </div>
+                `;
+            }
+            renderingState.nucleiChartDone = true;
+            console.log('✅ [Nuclei 차트] 취약점 없음');
+            return;
+        }
+        
+        const ctx = document.getElementById('nucleiSeverityChart');
+        if (ctx) {
+            // 퍼센트 계산
+            const getPercentage = (count) => total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+            
+            const labels = [
+                `Critical (${getPercentage(severityCounts.critical)}%)`,
+                `High (${getPercentage(severityCounts.high)}%)`,
+                `Medium (${getPercentage(severityCounts.medium)}%)`,
+                `Low (${getPercentage(severityCounts.low)}%)`,
+                `Info (${getPercentage(severityCounts.info)}%)`
+            ];
+            
+            nucleiSeverityChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: [
+                            severityCounts.critical,
+                            severityCounts.high,
+                            severityCounts.medium,
+                            severityCounts.low,
+                            severityCounts.info
+                        ],
+                        backgroundColor: [
+                            '#dc3545', // Critical - 빨강
+                            '#fd7e14', // High - 주황
+                            '#ffc107', // Medium - 노랑
+                            '#0dcaf0', // Low - 청록
+                            '#6c757d'  // Info - 회색
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        },
+                        tooltip: {
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const percentage = getPercentage(value);
+                                    return `${label.split(' (')[0]}: ${value}개 (${percentage}%)`;
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'CVE 매칭 우선 사용',
+                            font: { size: 11 },
+                            color: '#ffffff'
+                        }
+                    }
+                }
+            });
+            
+            renderingState.nucleiChartDone = true;
+            console.log('✅ [Nuclei 차트] 완료');
+        }
+    }
+    
+    // Nuclei 차트 업데이트 함수
+    function updateNucleiSeverityChart() {
+        if (!nucleiSeverityChart) {
+            console.warn('⚠️ [Nuclei 차트 업데이트] 차트가 초기화되지 않음');
+            return;
+        }
+        
+        // localStorage에 필터 상태 저장
+        localStorage.setItem('excludeNucleiInfoLow', excludeNucleiInfoLow);
+        console.log(`💾 [localStorage] Nuclei 필터 상태 저장: ${excludeNucleiInfoLow ? '제외됨' : '포함됨'}`);
+        
+        console.log(`🔄 [Nuclei 차트 업데이트] Info/Low 제외: ${excludeNucleiInfoLow}`);
+        const severityCounts = calculateNucleiSeverityCounts(excludeNucleiInfoLow);
+        
+        // 퍼센트 계산
+        const total = severityCounts.critical + severityCounts.high + severityCounts.medium + severityCounts.low + severityCounts.info;
+        const getPercentage = (count) => total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+        
+        // 레이블 업데이트 (퍼센트 포함)
+        nucleiSeverityChart.data.labels = [
+            `Critical (${getPercentage(severityCounts.critical)}%)`,
+            `High (${getPercentage(severityCounts.high)}%)`,
+            `Medium (${getPercentage(severityCounts.medium)}%)`,
+            `Low (${getPercentage(severityCounts.low)}%)`,
+            `Info (${getPercentage(severityCounts.info)}%)`
+        ];
+        
+        nucleiSeverityChart.data.datasets[0].data = [
+            severityCounts.critical,
+            severityCounts.high,
+            severityCounts.medium,
+            severityCounts.low,
+            severityCounts.info
+        ];
+        
+        nucleiSeverityChart.update();
+        console.log('✅ [Nuclei 차트 업데이트] 완료');
+    }
+    
+    // Nuclei 위험도 분포 계산 (CVE 매칭 우선, Info/Low 필터링 지원)
+    function calculateNucleiSeverityCounts(excludeInfoLow = false) {
+        const severityCounts = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+            info: 0
+        };
+        
+        const vulnerabilities = scanData?.vulnerabilities || [];
+        const infraVulns = scanData?.infrastructure_vulnerabilities || [];
+        
+        // infrastructure_vulnerabilities를 CVE ID로 빠르게 찾기 위한 맵 생성
+        const cveMap = {};
+        infraVulns.forEach(iv => {
+            if (iv.cve_id) {
+                cveMap[iv.cve_id] = iv;
+            }
+        });
+        
+        vulnerabilities.forEach(vuln => {
+            // Nuclei 취약점만 필터링
+            const source = (vuln.source || vuln.sources?.[0] || '').toLowerCase();
+            if (source !== 'nuclei') return;
+            
+            let severity = 'info';
+            
+            // CVE 매칭이 있는 경우 CVSS 점수 기반으로 severity 계산
+            if (vuln.cve && Array.isArray(vuln.cve) && vuln.cve.length > 0) {
+                // 첫 번째 CVE ID로 infrastructure_vulnerabilities에서 찾기
+                const cveId = vuln.cve[0];
+                const infraVuln = cveMap[cveId];
+                
+                if (infraVuln?.nvd_data?.cvss_score) {
+                    const cvssScore = infraVuln.nvd_data.cvss_score;
+                    if (cvssScore >= 9.0) severity = 'critical';
+                    else if (cvssScore >= 7.0) severity = 'high';
+                    else if (cvssScore >= 4.0) severity = 'medium';
+                    else if (cvssScore > 0) severity = 'low';
+                } else {
+                    // CVSS 점수가 없으면 원본 severity 사용
+                    severity = (vuln.severity || 'info').toLowerCase();
+                }
+            } else {
+                // CVE ID가 없으면 원본 severity 사용
+                severity = (vuln.severity || 'info').toLowerCase();
+            }
+            
+            // Info/Low 필터링
+            if (excludeInfoLow && (severity === 'info' || severity === 'low')) {
+                return;
+            }
+            
+            if (severityCounts.hasOwnProperty(severity)) {
+                severityCounts[severity]++;
+            } else {
+                severityCounts.info++;
+            }
+        });
+        
+        return severityCounts;
+    }
+    
+    // CWE 빈도 차트 초기화 (비동기, Top 10만 표시)
+    function initializeCWEChart() {
+        if (cweChart !== null) {
+            console.log('⏭️ [CWE 차트] 이미 초기화됨, 스킵');
+            return;
+        }
+        if (!scanData || !scanData.vulnerabilities) {
+            console.warn('⚠️ [CWE 차트] 데이터 없음');
+            return;
+        }
+        console.log('🔄 [CWE 차트] 초기화 시작');
+        
+        const vulnerabilities = scanData.vulnerabilities;
+        
+        // CWE 빈도 집계 (최적화: 한 번만 순회)
+        const cweCounts = {};
+        for (let i = 0; i < vulnerabilities.length; i++) {
+            const cwe = vulnerabilities[i].cwe || vulnerabilities[i].cwe_metadata?.cwe_id || 'N/A';
+            const cweKey = cwe.toString();
+            cweCounts[cweKey] = (cweCounts[cweKey] || 0) + 1;
+        }
+        
+        // 상위 10개 CWE만 추출 (성능 최적화 핵심!)
+        const sortedCWE = Object.entries(cweCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+        
+        const cweCtx = document.getElementById('cweChart');
+        if (cweCtx) {
+            cweChart = new Chart(cweCtx, {
+                type: 'bar',
+                data: {
+                    labels: sortedCWE.map(item => item[0]),
+                    datasets: [{
+                        label: '빈도',
+                        data: sortedCWE.map(item => item[1]),
+                        backgroundColor: '#0d6efd'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        renderingState.cweChartDone = true;
+        console.log('✅ [CWE 차트] 완료');
+    }
+    
+    // 위험도 배지 생성
+    function getSeverityBadge(severity) {
+        const severityLower = (severity || 'info').toLowerCase();
+        const badgeClasses = {
+            critical: 'badge bg-danger',
+            high: 'badge bg-warning text-dark',
+            medium: 'badge bg-info text-dark',
+            low: 'badge bg-primary',
+            info: 'badge bg-secondary'
+        };
+        const badgeClass = badgeClasses[severityLower] || badgeClasses.info;
+        return `<span class="${badgeClass}">${severity.toUpperCase()}</span>`;
+    }
+    
+    // 소스 배지 생성
+    function getSourceBadge(source) {
+        const sourceLower = (source || 'unknown').toLowerCase();
+        const badges = {
+            zap: '<span class="badge bg-primary">ZAP</span>',
+            nuclei: '<span class="badge bg-success">Nuclei</span>',
+            nmap: '<span class="badge bg-info text-dark">Nmap</span>',
+            unknown: '<span class="badge bg-secondary">Unknown</span>'
+        };
+        return badges[sourceLower] || badges.unknown;
+    }
+    
+    // HTML 이스케이프 함수 (XSS 방지)
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // URL 검증 및 이스케이프 함수 (XSS 방지)
+    function safeUrl(url) {
+        if (!url) return '';
+        // URL을 이스케이프 처리
+        const escaped = escapeHtml(url);
+        // javascript:, data:, vbscript: 등의 프로토콜 방지
+        const lowerUrl = url.toLowerCase().trim();
+        if (lowerUrl.startsWith('javascript:') || 
+            lowerUrl.startsWith('data:') || 
+            lowerUrl.startsWith('vbscript:') ||
+            lowerUrl.startsWith('on')) {
+            return '#';
+        }
+        return escaped;
+    }
+    
+    // DataTables 한국어 언어팩 (인라인 정의 - CORS 방지)
+    const dataTablesKorean = {
+        "decimal": "",
+        "emptyTable": "데이터가 없습니다",
+        "info": "_START_ - _END_ / _TOTAL_",
+        "infoEmpty": "0 - 0 / 0",
+        "infoFiltered": "(전체 _MAX_건 중 검색결과)",
+        "infoPostFix": "",
+        "thousands": ",",
+        "lengthMenu": "_MENU_ 개씩 보기",
+        "loadingRecords": "로딩중...",
+        "processing": "처리중...",
+        "search": "검색:",
+        "zeroRecords": "검색 결과가 없습니다",
+        "paginate": {
+            "first": "첫 페이지",
+            "last": "마지막 페이지",
+            "next": "다음",
+            "previous": "이전"
+        },
+        "aria": {
+            "sortAscending": ": 오름차순 정렬",
+            "sortDescending": ": 내림차순 정렬"
+        }
+    };
+    
+    // DataTables 초기화 (비동기, 성능 최적화, XSS 방지)
+    function initializeDataTable() {
+        if (vulnerabilitiesTable !== null) {
+            console.log('⏭️ [취약점 테이블] 이미 초기화됨, 스킵');
+            return;
+        }
+        if (!scanData || !scanData.vulnerabilities) {
+            console.warn('⚠️ [취약점 테이블] 데이터 없음');
+            return;
+        }
+        console.log('🔄 [취약점 테이블] 초기화 시작');
+        
+        // Info/Low 등급 제외 (Critical, High, Medium만 표시)
+        const allVulnerabilities = scanData.vulnerabilities;
+        const vulnerabilities = allVulnerabilities.filter(v => {
+            const severity = (v.severity || 'info').toLowerCase();
+            // Critical, High, Medium만 포함 (Info, Low 제외)
+            return severity === 'critical' || severity === 'high' || severity === 'medium';
+        });
+        
+        console.log(`📊 [취약점 테이블] 전체 ${allVulnerabilities.length}개 중 ${vulnerabilities.length}개 표시 (Info/Low 제외)`);
+        
+        // 테이블 데이터 생성 (XSS 방지: HTML 이스케이프 처리)
+        const tableData = vulnerabilities.map(v => {
+            // 이름과 설명을 결합 (이름은 굵게, 설명은 밑에 작은 글씨로)
+            const name = escapeHtml(v.name || '-');
+            const description = escapeHtml(v.description || '');
+            const nameWithDesc = `
+                <div style="margin-bottom: 4px;">
+                    <span style="font-weight: 600; font-size: 0.95rem; color: var(--slate-100);">${name}</span>
+                </div>
+                ${description ? `<div style="font-size: 0.85rem; color: var(--slate-300); line-height: 1.5;">${description}</div>` : ''}
+            `;
+            
+            // CWE 이스케이프
+            const cwe = escapeHtml((v.cwe || v.cwe_metadata?.cwe_id || 'N/A').toString());
+            
+            // URL 안전 처리 (XSS 방지)
+            let urlCell = '-';
+            if (v.url) {
+                const safeUrlValue = safeUrl(v.url);
+                const escapedUrlText = escapeHtml(v.url);
+                // href는 안전하게 처리된 URL, 표시 텍스트는 이스케이프된 텍스트
+                urlCell = `<a href="${safeUrlValue}" target="_blank" rel="noopener noreferrer" style="word-break: break-all;">${escapedUrlText}</a>`;
+            }
+            
+            return [
+                nameWithDesc,
+                getSeverityBadge(v.severity || 'info'),
+                getSourceBadge(v.source || v.sources?.[0] || 'unknown'),
+                cwe,
+                urlCell
+            ];
+        });
+        
+        const tableEl = $('#vulnerabilitiesTable');
+        if (tableEl.length) {
+            vulnerabilitiesTable = tableEl.DataTable({
+                data: tableData,
+                deferRender: true,  // 성능 최적화: 지연 렌더링
+                pageLength: 10,     // 성능 최적화: 페이지당 10개만 표시
+                order: [[1, 'desc']], // 위험도로 정렬
+                language: dataTablesKorean,  // 인라인 한국어 언어팩 사용 (CORS 방지)
+                columnDefs: [
+                    { width: '40%', targets: [0] },  // 이름/설명: 40%
+                    { width: '12%', targets: [1] },  // 위험도: 12%
+                    { width: '10%', targets: [2] },  // 소스: 10%
+                    { width: '10%', targets: [3] },  // CWE: 10%
+                    { width: '28%', targets: [4] },  // URL: 28%
+                    { orderable: false, targets: [4] } // URL은 정렬 비활성화
+                ],
+                autoWidth: false  // columnDefs의 width를 정확히 적용하기 위해
+            });
+            
+            // 취약점 행 클릭 이벤트: 모달 표시
+            $('#vulnerabilitiesTable tbody').on('click', 'tr', function() {
+                const rowData = vulnerabilitiesTable.row(this).data();
+                const rowIndex = vulnerabilitiesTable.row(this).index();
+                if (rowIndex !== undefined && vulnerabilities[rowIndex]) {
+                    showVulnerabilityModal(vulnerabilities[rowIndex]);
+                }
+            });
+            
+            // 행에 커서 포인터 스타일 추가
+            $('#vulnerabilitiesTable tbody').css('cursor', 'pointer');
+        }
+        
+        renderingState.tableDone = true;
+        console.log('✅ [취약점 테이블] 완료');
+    }
+    
+    // 취약점 상세 모달 표시
+    function showVulnerabilityModal(vuln) {
+        if (!vuln) return;
+        
+        // 모달 내용 채우기
+        const modalName = document.getElementById('modal-name');
+        const modalConfidence = document.getElementById('modal-confidence');
+        const modalSolution = document.getElementById('modal-solution');
+        const modalEvidence = document.getElementById('modal-evidence');
+        
+        modalName.textContent = vuln.name || '-';
+        
+        document.getElementById('modal-severity').innerHTML = getSeverityBadge(vuln.severity || 'info');
+        
+        modalConfidence.textContent = vuln.confidence || 'N/A';
+        
+        modalEvidence.textContent = vuln.evidence || '증거 정보가 없습니다.';
+        
+        modalSolution.textContent = vuln.solution || '해결 방안이 제공되지 않았습니다.';
+        
+        // URL 링크
+        const urlLink = document.getElementById('modal-url-link');
+        if (vuln.url) {
+            urlLink.href = safeUrl(vuln.url);
+            urlLink.textContent = vuln.url;
+        } else {
+            urlLink.href = '#';
+            urlLink.textContent = '-';
+        }
+        
+        // 탈취 데이터 렌더링
+        const executionResult = vuln.execution_result;
+        if (executionResult && executionResult.extracted_data) {
+            renderExtractedData(executionResult.extracted_data);
+        } else {
+            // 탈취 데이터가 없으면 섹션 숨기기
+            const extractedDataSection = document.getElementById('modal-extracted-data');
+            if (extractedDataSection) {
+                extractedDataSection.style.display = 'none';
+            }
+        }
+        
+        // 모달 표시
+        const modal = new bootstrap.Modal(document.getElementById('vulnerabilityModal'));
+        modal.show();
+    }
+    
+    // 탈취 데이터 시각화 함수
+    function renderExtractedData(extractedData) {
+        const container = document.getElementById('extracted-data-content');
+        const section = document.getElementById('modal-extracted-data');
+        
+        if (!extractedData || !container || !section) {
+            if (section) section.style.display = 'none';
+            return;
+        }
+        
+        // 1. 배열 형태 (SQL Injection 결과 등) → 데이터 테이블
+        if (Array.isArray(extractedData)) {
+            if (extractedData.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            
+            section.style.display = 'block';
+            const table = createDataTable(extractedData);
+            container.innerHTML = table;
+            return;
+        }
+        
+        // 2. file_content 속성이 있는 경우 (LFI 등) → 코드 블록
+        if (extractedData.file_content !== undefined) {
+            section.style.display = 'block';
+            const fileContent = extractedData.file_content;
+            const fileName = extractedData.file_name || extractedData.filename || '파일 내용';
+            const fileType = extractedData.file_type || 'plaintext';
+            
+            container.innerHTML = `
+                <div class="mb-2">
+                    <small class="text-slate-400">파일: ${escapeHtml(fileName)}</small>
+                </div>
+                <pre class="bg-slate-900 text-slate-100 p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; font-family: 'Courier New', monospace;"><code>${escapeHtml(fileContent)}</code></pre>
+            `;
+            return;
+        }
+        
+        // 3. 객체 형태 (시스템 정보 등) → 카드 형태
+        if (typeof extractedData === 'object') {
+            section.style.display = 'block';
+            const cards = createInfoCards(extractedData);
+            container.innerHTML = cards;
+            return;
+        }
+        
+        // 4. 기타 경우 → JSON으로 표시
+        section.style.display = 'block';
+        container.innerHTML = `
+            <pre class="bg-slate-900 text-slate-100 p-3 rounded" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"><code>${escapeHtml(JSON.stringify(extractedData, null, 2))}</code></pre>
+        `;
+    }
+    
+    // 데이터 테이블 생성 함수
+    function createDataTable(data) {
+        if (data.length === 0) return '<p class="text-slate-400">데이터가 없습니다.</p>';
+        
+        // 첫 번째 객체의 키를 컬럼으로 사용
+        const columns = Object.keys(data[0]);
+        
+        let html = '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;"><table class="table table-dark table-striped table-sm mb-0">';
+        
+        // 헤더
+        html += '<thead class="table-dark sticky-top"><tr>';
+        columns.forEach(col => {
+            html += `<th>${escapeHtml(col)}</th>`;
+        });
+        html += '</tr></thead>';
+        
+        // 바디
+        html += '<tbody>';
+        data.forEach(row => {
+            html += '<tr>';
+            columns.forEach(col => {
+                const value = row[col];
+                const displayValue = value !== null && value !== undefined ? String(value) : '-';
+                html += `<td>${escapeHtml(displayValue)}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody>';
+        
+        html += '</table></div>';
+        return html;
+    }
+    
+    // 정보 카드 생성 함수
+    function createInfoCards(data) {
+        const iconMap = {
+            'os': '🖥',
+            'os_version': '🖥',
+            'os_type': '🖥',
+            'db': '🗄',
+            'database': '🗄',
+            'db_version': '🗄',
+            'root': '🔐',
+            'root_access': '🔐',
+            'permission': '🔐',
+            'user': '👤',
+            'username': '👤',
+            'version': '📦',
+            'software': '📦',
+            'service': '🔧'
+        };
+        
+        let html = '<div class="row g-2">';
+        
+        Object.entries(data).forEach(([key, value]) => {
+            if (value === null || value === undefined) return;
+            
+            const icon = iconMap[key.toLowerCase()] || '📋';
+            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+            
+            html += `
+                <div class="col-md-6 col-lg-4">
+                    <div class="card bg-slate-700 border-slate-600">
+                        <div class="card-body p-2">
+                            <div class="d-flex align-items-center">
+                                <span class="me-2" style="font-size: 1.2em;">${icon}</span>
+                                <div class="flex-grow-1">
+                                    <small class="text-slate-400 d-block">${escapeHtml(displayKey)}</small>
+                                    <div class="text-white text-truncate" style="font-size: 0.9em;" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        return html;
+    }
+    
+    // 인프라 서비스 그리드 카드 생성
+    function initializeInfrastructureGrid() {
+        if (renderingState.infraGridDone) {
+            console.log('⏭️ [인프라 그리드] 이미 완료됨, 스킵');
+            return;
+        }
+        if (!scanData || !scanData.infrastructure) {
+            console.warn('⚠️ [인프라 그리드] 데이터 없음');
+            return;
+        }
+        console.log('🔄 [인프라 그리드] 초기화 시작');
+        
+        const infrastructure = scanData.infrastructure;
+        const services = infrastructure.services || [];
+        const openPorts = infrastructure.open_ports || [];
+        
+        const gridContainer = document.getElementById('infrastructure-grid');
+        if (!gridContainer) return;
+        
+        gridContainer.innerHTML = '';
+        
+        if (services.length === 0 && openPorts.length === 0) {
+            gridContainer.innerHTML = '<div class="col-12"><p class="text-muted">인프라 정보가 없습니다.</p></div>';
+            return;
+        }
+        
+        // 서비스 정보를 카드로 표시
+        services.forEach(service => {
+            const card = document.createElement('div');
+            card.className = 'col-md-4 col-lg-3 mb-3';
+            
+            const product = service.product || service.name || 'Unknown';
+            const version = service.version || '';
+            const port = service.port || '-';
+            const protocol = service.protocol || 'tcp';
+            
+            card.innerHTML = `
+                <div class="card bg-slate-700 border-slate-600 h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-server text-info me-2"></i>
+                            <h6 class="card-title mb-0 text-white">${escapeHtml(product)}</h6>
+                        </div>
+                        ${version ? `<p class="text-slate-300 mb-1"><small>버전: ${escapeHtml(version)}</small></p>` : ''}
+                        <p class="text-slate-300 mb-0"><small>포트: ${port}/${protocol}</small></p>
+                    </div>
+                </div>
+            `;
+            
+            gridContainer.appendChild(card);
+        });
+        
+        // 서비스 정보가 없으면 포트 정보로 대체
+        if (services.length === 0 && openPorts.length > 0) {
+            openPorts.forEach(portInfo => {
+                const card = document.createElement('div');
+                card.className = 'col-md-4 col-lg-3 mb-3';
+                
+                const port = portInfo.port || '-';
+                const protocol = portInfo.protocol || 'tcp';
+                const service = portInfo.service || 'Unknown';
+                
+                card.innerHTML = `
+                    <div class="card bg-slate-700 border-slate-600 h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-network-wired text-info me-2"></i>
+                                <h6 class="card-title mb-0 text-white">포트 ${port}</h6>
+                            </div>
+                            <p class="text-slate-300 mb-1"><small>서비스: ${escapeHtml(service)}</small></p>
+                            <p class="text-slate-300 mb-0"><small>프로토콜: ${protocol}</small></p>
+                        </div>
+                    </div>
+                `;
+                
+                gridContainer.appendChild(card);
+            });
+        }
+        
+        renderingState.infraGridDone = true;
+        console.log('✅ [인프라 그리드] 완료');
+    }
+    
+    // Katana 엔드포인트 테이블 초기화
+    function initializeEndpointsTable() {
+        if (endpointsTable !== null) {
+            console.log('⏭️ [엔드포인트 테이블] 이미 초기화됨, 스킵');
+            return;
+        }
+        if (!scanData) {
+            console.warn('⚠️ [엔드포인트 테이블] scanData 없음');
+            return;
+        }
+        console.log('🔄 [엔드포인트 테이블] 초기화 시작');
+        
+        // 안전장치: 테이블 요소 존재 여부 확인
+        const endpointsTableEl = $('#endpointsTable');
+        if (!endpointsTableEl || !endpointsTableEl.length) {
+            console.warn('⚠️ [엔드포인트 테이블] HTML 요소를 찾을 수 없습니다 (id="endpointsTable")');
+            return;
+        }
+        
+        // Katana URL 데이터 추출 (여러 경로 시도)
+        let endpoints = [];
+        
+        // 1. scanData.endpoints (백엔드에서 추가한 데이터) 우선 사용
+        if (scanData.endpoints && Array.isArray(scanData.endpoints)) {
+            endpoints = scanData.endpoints;
+            console.log(`✅ [엔드포인트 테이블] scanData.endpoints에서 ${endpoints.length}개 URL 발견`);
+        } else if (scanData.discovered_urls && Array.isArray(scanData.discovered_urls)) {
+            endpoints = scanData.discovered_urls;
+            console.log(`✅ [엔드포인트 테이블] scanData.discovered_urls에서 ${endpoints.length}개 URL 발견`);
+        } else if (scanData.katana_urls && Array.isArray(scanData.katana_urls)) {
+            endpoints = scanData.katana_urls;
+            console.log(`✅ [엔드포인트 테이블] scanData.katana_urls에서 ${endpoints.length}개 URL 발견`);
+        } else {
+            console.warn('⚠️ [엔드포인트 테이블] URL 데이터를 찾을 수 없음');
+        }
+        
+        // 2. 테이블 데이터 생성
+        const tableData = [];
+        
+        if (endpoints.length > 0) {
+            // URL 리스트가 문자열 배열인 경우 처리
+            endpoints.forEach((url, index) => {
+                let urlStr = '';
+                let method = 'GET';
+                
+                if (typeof url === 'string') {
+                    // 단순 문자열인 경우
+                    urlStr = url;
+                    method = 'GET';
+                } else if (typeof url === 'object' && url !== null) {
+                    // 객체인 경우
+                    urlStr = url.url || url.endpoint || url.href || '-';
+                    method = url.method || 'GET';
+                } else {
+                    urlStr = String(url);
+                    method = 'GET';
+                }
+                
+                if (urlStr && urlStr !== '-') {
+                    // Status와 Tech Stack 추출 (데이터에서 가져오거나 기본값 사용)
+                    const status = url.status || url.response_status || '200';
+                    const techStack = url.tech_stack || url.technologies || url.tech || '-';
+                    
+                    tableData.push([
+                        `<a href="${safeUrl(urlStr)}" target="_blank" rel="noopener noreferrer" class="text-blue-400">${escapeHtml(urlStr)}</a>`,
+                        escapeHtml(method),
+                        escapeHtml(String(status)),
+                        escapeHtml(Array.isArray(techStack) ? techStack.join(', ') : String(techStack))
+                    ]);
+                }
+            });
+        }
+        
+        // 데이터가 없으면 메시지 표시
+        if (tableData.length === 0) {
+            tableData.push([
+                '<span class="text-muted">탐색된 엔드포인트가 없습니다.</span>',
+                '-',
+                '-',
+                '-'
+            ]);
+            console.warn('⚠️ [엔드포인트 테이블] 표시할 URL이 없음');
+        } else {
+            console.log(`✅ [엔드포인트 테이블] ${tableData.length}개 URL 테이블 데이터 생성 완료`);
+        }
+        
+        // DataTables 초기화
+        if (endpointsTable) {
+            endpointsTable.destroy();
+        }
+        
+        endpointsTable = endpointsTableEl.DataTable({
+            data: tableData,
+            deferRender: true,
+            pageLength: 25,
+            language: dataTablesKorean,
+            columnDefs: [
+                { width: '50%', targets: [0] },  // URL
+                { width: '10%', targets: [1] },  // Method
+                { width: '10%', targets: [2] },  // Status
+                { width: '30%', targets: [3] }   // Tech Stack
+            ],
+            autoWidth: false
+        });
+        
+        renderingState.endpointsTableDone = true;
+        console.log('✅ [엔드포인트 테이블] 완료');
+    }
+    
+    // AI 요약 카드 생성 (공격 체인 요약)
+    function initializeAISummaryCard() {
+        if (renderingState.aiSummaryDone) {
+            console.log('⏭️ [AI 요약 카드] 이미 완료됨, 스킵');
+            return;
+        }
+        console.log('🔄 [AI 요약 카드] 초기화 시작');
+        
+        // API를 통해 로드된 AI 리포트 사용 (전역 변수 aiReportMd)
+        if (aiReportMd) {
+            // '공격 체인 요약' 섹션 추출
+            const summaryMatch = aiReportMd.match(/#\s*공격\s*체인\s*요약\s*([\s\S]*?)(?=#|$)/i);
+            
+            if (summaryMatch) {
+                const summaryContent = summaryMatch[1].trim();
+                const summaryCard = document.getElementById('ai-summary-card');
+                const summaryContentEl = document.getElementById('ai-summary-content');
+                
+                if (summaryCard && summaryContentEl) {
+                    // Marked.js로 마크다운 변환
+                    if (typeof marked !== 'undefined') {
+                        summaryContentEl.innerHTML = marked.parse(summaryContent);
+                    } else {
+                        summaryContentEl.innerHTML = '<pre class="text-slate-200">' + escapeHtml(summaryContent) + '</pre>';
+                    }
+                    summaryCard.style.display = 'block';
+                    renderingState.aiSummaryDone = true;
+                    console.log('✅ [AI 요약 카드] 완료');
+                }
+            } else {
+                console.log('⏭️ [AI 요약 카드] 공격 체인 요약 섹션 없음');
+            }
+        } else {
+            console.log('⏭️ [AI 요약 카드] AI 리포트 없음 (API에서 로드되지 않음)');
+        }
+    }
+    
+    // AI 리포트 로드 및 파싱
+    function loadAIReport() {
+        // API를 통해 로드된 AI 리포트 마크다운
+        if (aiReportMd) {
+            try {
+                const reportDisplayEl = document.getElementById('ai-report-display');
+                if (reportDisplayEl) {
+                    // Marked.js를 사용하여 마크다운을 HTML로 변환
+                    if (typeof marked !== 'undefined') {
+                        reportDisplayEl.innerHTML = marked.parse(aiReportMd);
+                    } else {
+                        reportDisplayEl.innerHTML = '<pre>' + escapeHtml(aiReportMd) + '</pre>';
+                    }
+                }
+            } catch (e) {
+                console.error('AI 리포트 렌더링 실패:', e);
+                const reportDisplayEl = document.getElementById('ai-report-display');
+                if (reportDisplayEl) {
+                    reportDisplayEl.innerHTML = '<p class="text-danger">AI 리포트 렌더링 중 오류가 발생했습니다.</p>';
+                }
+            }
+        } else {
+            // AI 리포트가 없는 경우
+            const reportDisplayEl = document.getElementById('ai-report-display');
+            if (reportDisplayEl) {
+                reportDisplayEl.innerHTML = '<p class="text-muted">AI 리포트가 아직 생성되지 않았습니다.</p>';
+            }
+        }
+    }
+    
+    // CVE 매칭 테이블 페이징 변수
+    let cveAllData = [];
+    let cveFilteredData = [];
+    let cveCurrentPage = 1;
+    let cveCurrentSeverity = 'all';
+    const cveItemsPerPage = 10;
+    
+    // CVE 매칭 테이블 초기화
+    function initializeCveMatchingTable() {
+        console.log('🔄 [CVE 매칭 테이블] 초기화 시작');
+        
+        const tbody = document.getElementById('cveMatchingTableBody');
+        if (!tbody) {
+            console.warn('⚠️ [CVE 매칭 테이블] HTML 요소를 찾을 수 없습니다');
+            return;
+        }
+        
+        cveAllData = scanData?.infrastructure_vulnerabilities || [];
+        cveCurrentPage = 1;
+        cveCurrentSeverity = 'all';
+        
+        // 심각도별 개수 계산 및 표시
+        updateCveSeverityCounts();
+        
+        // 전체 데이터로 시작
+        filterCveBySeverity('all');
+    }
+    
+    // 심각도별 개수 계산 및 표시
+    function updateCveSeverityCounts() {
+        const counts = {
+            all: cveAllData.length,
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0,
+            info: 0
+        };
+        
+        cveAllData.forEach(v => {
+            const nvdData = v.nvd_data || {};
+            const cvssScore = nvdData.cvss_score || 0.0;
+            
+            if (typeof cvssScore === 'number') {
+                if (cvssScore >= 9.0) counts.critical++;
+                else if (cvssScore >= 7.0) counts.high++;
+                else if (cvssScore >= 4.0) counts.medium++;
+                else if (cvssScore > 0) counts.low++;
+                else counts.info++;
+            } else {
+                counts.info++;
+            }
+        });
+        
+        // 개수 업데이트
+        document.getElementById('cve-count-all').textContent = counts.all;
+        document.getElementById('cve-count-critical').textContent = counts.critical;
+        document.getElementById('cve-count-high').textContent = counts.high;
+        document.getElementById('cve-count-medium').textContent = counts.medium;
+        document.getElementById('cve-count-low').textContent = counts.low;
+        document.getElementById('cve-count-info').textContent = counts.info;
+    }
+    
+    // 심각도별 필터링
+    function filterCveBySeverity(severity) {
+        cveCurrentSeverity = severity;
+        cveCurrentPage = 1;
+        
+        if (severity === 'all') {
+            cveFilteredData = cveAllData;
+        } else {
+            cveFilteredData = cveAllData.filter(v => {
+                const nvdData = v.nvd_data || {};
+                const cvssScore = nvdData.cvss_score || 0.0;
+                
+                if (typeof cvssScore === 'number') {
+                    if (severity === 'critical' && cvssScore >= 9.0) return true;
+                    if (severity === 'high' && cvssScore >= 7.0 && cvssScore < 9.0) return true;
+                    if (severity === 'medium' && cvssScore >= 4.0 && cvssScore < 7.0) return true;
+                    if (severity === 'low' && cvssScore > 0 && cvssScore < 4.0) return true;
+                    if (severity === 'info' && cvssScore === 0) return true;
+                } else {
+                    return severity === 'info';
+                }
+                return false;
+            });
+        }
+        
+        // 탭 활성화 상태 업데이트
+        document.querySelectorAll('#cveSeverityTabs .nav-link').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        const activeTab = document.getElementById(`cve-tab-${severity}`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
+        
+        renderCveTable();
+    }
+    
+    // CVE 테이블 렌더링 (페이징 적용)
+    function renderCveTable() {
+        const tbody = document.getElementById('cveMatchingTableBody');
+        const paginationEl = document.getElementById('cveMatchingPagination');
+        const infoEl = document.getElementById('cveMatchingInfo');
+        const pageInfoEl = document.getElementById('cveMatchingPageInfo');
+        const prevBtn = document.getElementById('cveMatchingPrevBtn');
+        const nextBtn = document.getElementById('cveMatchingNextBtn');
+        
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        // 필터링된 데이터 사용 (0개여도 필터링된 데이터 사용)
+        let dataToRender = cveCurrentSeverity === 'all' ? cveAllData : cveFilteredData;
+        
+        // "전체" 탭일 때 심각도가 높은 순으로 정렬 (CVSS 점수 기준 내림차순)
+        if (cveCurrentSeverity === 'all' && dataToRender.length > 0) {
+            dataToRender = [...dataToRender].sort((a, b) => {
+                const aScore = (a.nvd_data?.cvss_score || 0.0);
+                const bScore = (b.nvd_data?.cvss_score || 0.0);
+                // 숫자로 변환하여 비교
+                const aNum = typeof aScore === 'number' ? aScore : 0.0;
+                const bNum = typeof bScore === 'number' ? bScore : 0.0;
+                // 내림차순 정렬 (높은 점수부터)
+                return bNum - aNum;
+            });
+        }
+        
+        if (dataToRender.length === 0) {
+            // 심각도별 필터링 시 적절한 메시지 표시
+            if (cveCurrentSeverity !== 'all') {
+                const severityNames = {
+                    'critical': 'Critical',
+                    'high': 'High',
+                    'medium': 'Medium',
+                    'low': 'Low',
+                    'info': 'Info'
+                };
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">${severityNames[cveCurrentSeverity] || '해당'} 심각도의 CVE가 없습니다.</td></tr>`;
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">CVE 데이터가 없습니다.</td></tr>';
+            }
+            if (paginationEl) paginationEl.style.display = 'none';
+            return;
+        }
+        
+        // 페이징 계산
+        const totalPages = Math.ceil(dataToRender.length / cveItemsPerPage);
+        const startIndex = (cveCurrentPage - 1) * cveItemsPerPage;
+        const endIndex = Math.min(startIndex + cveItemsPerPage, dataToRender.length);
+        const pageData = dataToRender.slice(startIndex, endIndex);
+        
+        // 테이블 렌더링
+        pageData.forEach((v) => {
+            const nvdData = v.nvd_data || {};
+            const context = v.context || {};
+            
+            const cveId = escapeHtml(v.cve_id || 'N/A');
+            const cvssScore = nvdData.cvss_score || 0.0;
+            const cvssScoreFormatted = typeof cvssScore === 'number' ? cvssScore.toFixed(1) : cvssScore;
+            
+            let severity = 'N/A';
+            if (typeof cvssScore === 'number') {
+                if (cvssScore >= 9.0) severity = 'Critical';
+                else if (cvssScore >= 7.0) severity = 'High';
+                else if (cvssScore >= 4.0) severity = 'Medium';
+                else if (cvssScore > 0) severity = 'Low';
+                else severity = 'Info';
+            }
+            const severityBadge = getSeverityBadge(severity.toLowerCase());
+            
+            const product = context.product || context.name || '';
+            const version = context.version || '';
+            const productVersion = (product && version) ? `${escapeHtml(product)} ${escapeHtml(version)}` : (product ? escapeHtml(product) : '-');
+            
+            const row = document.createElement('tr');
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', () => showCveDetail(v));
+            row.innerHTML = `
+                <td>
+                    <strong style="color: var(--primary-blue); text-decoration: underline; cursor: pointer;">
+                        ${cveId}
+                    </strong>
+                </td>
+                <td>${severityBadge}</td>
+                <td><strong style="color: var(--danger-red);">${cvssScoreFormatted}</strong></td>
+                <td style="font-size: 0.9rem;">${productVersion}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        // 페이징 컨트롤 업데이트
+        if (paginationEl) {
+            paginationEl.style.display = dataToRender.length > cveItemsPerPage ? 'flex' : 'none';
+        }
+        if (infoEl) {
+            infoEl.textContent = `표시 중: ${startIndex + 1}-${endIndex} / 전체: ${dataToRender.length}`;
+        }
+        if (pageInfoEl) {
+            pageInfoEl.textContent = `${cveCurrentPage} / ${totalPages}`;
+        }
+        if (prevBtn) {
+            prevBtn.disabled = cveCurrentPage <= 1;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = cveCurrentPage >= totalPages;
+        }
+        
+        console.log(`✅ [CVE 매칭 테이블] ${dataToRender.length}개 중 ${startIndex + 1}-${endIndex}번째 표시 (페이지 ${cveCurrentPage}/${totalPages}, 심각도: ${cveCurrentSeverity})`);
+        
+        // CVE 테이블 렌더링 후 CWE 컨테이너 높이 조절
+        setTimeout(() => {
+            syncCweContainerHeight();
+        }, 100);
+    }
+    
+    // CVE 테이블 높이에 맞춰 CWE 컨테이너 높이 동기화
+    function syncCweContainerHeight() {
+        // CVE 테이블이 있는 card-body 찾기
+        const cveCardBody = document.querySelector('#cveMatchingTable').closest('.card-body');
+        const cweContainer = document.getElementById('cweDetailsContainer');
+        const cweCardBody = cweContainer?.closest('.card-body');
+        
+        if (!cveCardBody || !cweContainer || !cweCardBody) return;
+        
+        // CVE card-body의 table-responsive 영역 높이 측정 (탭 제외)
+        const cveTableResponsive = cveCardBody.querySelector('.table-responsive');
+        const cvePagination = cveCardBody.querySelector('#cveMatchingPagination');
+        
+        if (!cveTableResponsive) return;
+        
+        // 테이블 영역 높이 + 페이징 영역 높이 (표시되는 경우)
+        let cveTableHeight = cveTableResponsive.offsetHeight;
+        if (cvePagination && cvePagination.style.display !== 'none') {
+            cveTableHeight += cvePagination.offsetHeight + 12; // mt-3 마진 포함
+        }
+        
+        // CWE card-body의 헤더 영역 제외한 높이 계산
+        // CWE 컨테이너의 max-height를 CVE 테이블 높이에 맞춤
+        if (cveTableHeight > 0) {
+            cweContainer.style.maxHeight = `${cveTableHeight}px`;
+            cweContainer.style.overflowY = 'auto';
+            console.log(`✅ [CWE 컨테이너 높이 동기화] CVE 테이블 높이: ${cveTableHeight}px`);
+        }
+    }
+    
+    // CVE 페이지 변경
+    function changeCvePage(direction) {
+        const dataToRender = cveFilteredData.length > 0 ? cveFilteredData : cveAllData;
+        const totalPages = Math.ceil(dataToRender.length / cveItemsPerPage);
+        const newPage = cveCurrentPage + direction;
+        if (newPage >= 1 && newPage <= totalPages) {
+            cveCurrentPage = newPage;
+            renderCveTable();
+        }
+    }
+    
+    // CVE 상세 정보 모달 표시
+    function showCveDetail(cve) {
+        const modal = new bootstrap.Modal(document.getElementById('cveDetailModal'));
+        const content = document.getElementById('cveDetailContent');
+        const nvdLink = document.getElementById('nvdLink');
+        
+        const nvdData = cve.nvd_data || {};
+        const context = cve.context || {};
+        
+        const cveId = cve.cve_id || 'N/A';
+        const cvssScore = nvdData.cvss_score || 0.0;
+        const cvssScoreFormatted = typeof cvssScore === 'number' ? cvssScore.toFixed(1) : cvssScore;
+        
+        let severity = 'N/A';
+        if (typeof cvssScore === 'number') {
+            if (cvssScore >= 9.0) severity = 'Critical';
+            else if (cvssScore >= 7.0) severity = 'High';
+            else if (cvssScore >= 4.0) severity = 'Medium';
+            else if (cvssScore > 0) severity = 'Low';
+            else severity = 'Info';
+        }
+        
+        const product = context.product || context.name || '';
+        const version = context.version || '';
+        const productVersion = (product && version) ? `${escapeHtml(product)} ${escapeHtml(version)}` : (product ? escapeHtml(product) : '-');
+        const cpe = context.cpe || nvdData.cpe || '-';
+        const cwe = nvdData.cwe || cve.cwe || '-';
+        const summary = escapeHtml(nvdData.summary || '설명 없음');
+        const publishedDate = nvdData.published_date || '-';
+        const modifiedDate = nvdData.modified_date || '-';
+        
+        // NVD 링크 설정
+        nvdLink.href = `https://nvd.nist.gov/vuln/detail/${cveId}`;
+        
+        // 모달 내용 생성
+        content.innerHTML = `
+            <div class="mb-4" style="background-color: transparent;">
+                <h4 class="mb-3" style="color: var(--slate-100);">
+                    <span style="color: var(--primary-blue);">${cveId}</span>
+                    ${getSeverityBadge(severity.toLowerCase())}
+                </h4>
+                <div class="mb-3" style="background-color: transparent;">
+                    <h6 style="color: var(--slate-100); font-weight: 600; margin-bottom: 0.5rem;">
+                        <i class="fas fa-info-circle me-2"></i>설명
+                    </h6>
+                    <p style="color: var(--slate-200); line-height: 1.6; background-color: transparent;">${summary}</p>
+                </div>
+            </div>
+
+            <div class="row mb-3" style="background-color: transparent;">
+                <div class="col-md-6 mb-3">
+                    <div class="card" style="background-color: var(--slate-700) !important; border: 1px solid var(--slate-600) !important;">
+                        <div class="card-body" style="background-color: var(--slate-700) !important; color: var(--slate-200) !important;">
+                            <h6 style="color: var(--slate-100) !important; font-weight: 600; margin-bottom: 0.5rem;">
+                                <i class="fas fa-chart-line me-2"></i>CVSS 점수
+                            </h6>
+                            <p class="mb-0" style="font-size: 1.5rem; font-weight: 700; color: var(--danger-red); background-color: transparent;">
+                                ${cvssScoreFormatted}
+                            </p>
+                            <small style="color: var(--slate-400) !important; background-color: transparent;">${severity} Severity</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card" style="background-color: var(--slate-700) !important; border: 1px solid var(--slate-600) !important;">
+                        <div class="card-body" style="background-color: var(--slate-700) !important; color: var(--slate-200) !important;">
+                            <h6 style="color: var(--slate-100) !important; font-weight: 600; margin-bottom: 0.5rem;">
+                                <i class="fas fa-calendar me-2"></i>발행일
+                            </h6>
+                            <p class="mb-0" style="color: var(--slate-200) !important; background-color: transparent;">${publishedDate}</p>
+                            <small style="color: var(--slate-400) !important; background-color: transparent;">최종 수정: ${modifiedDate}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3" style="background-color: transparent;">
+                <h6 style="color: var(--slate-100) !important; font-weight: 600; margin-bottom: 0.5rem;">
+                    <i class="fas fa-box me-2"></i>CPE (취약 제품)
+                </h6>
+                <div class="card" style="background-color: var(--slate-700) !important; border: 1px solid var(--slate-600) !important;">
+                    <div class="card-body" style="background-color: var(--slate-700) !important; color: var(--slate-200) !important;">
+                        <code style="color: var(--slate-200) !important; font-size: 0.9rem; word-break: break-all; background-color: var(--slate-800) !important; padding: 0.5rem; border-radius: 0.25rem; display: block;">${escapeHtml(cpe)}</code>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3" style="background-color: transparent;">
+                <h6 style="color: var(--slate-100) !important; font-weight: 600; margin-bottom: 0.5rem;">
+                    <i class="fas fa-bug me-2"></i>CWE (취약 유형)
+                </h6>
+                <div class="card" style="background-color: var(--slate-700) !important; border: 1px solid var(--slate-600) !important;">
+                    <div class="card-body" style="background-color: var(--slate-700) !important; color: var(--slate-200) !important;">
+                        <p class="mb-0" style="color: var(--slate-200) !important; background-color: transparent;">
+                            <strong style="color: var(--primary-blue);">${escapeHtml(cwe)}</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3" style="background-color: transparent;">
+                <h6 style="color: var(--slate-100) !important; font-weight: 600; margin-bottom: 0.5rem;">
+                    <i class="fas fa-server me-2"></i>영향받는 패키지
+                </h6>
+                <div class="card" style="background-color: var(--slate-700) !important; border: 1px solid var(--slate-600) !important;">
+                    <div class="card-body" style="background-color: var(--slate-700) !important; color: var(--slate-200) !important;">
+                        <p class="mb-0" style="color: var(--slate-200) !important; background-color: transparent;">${productVersion}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        modal.show();
+    }
+    
+    // CWE 메타데이터 캐시
+    let cweMetadataCache = {};
+    
+    // CWE 메타데이터 비동기 로드 함수
+    async function loadCweMetadata(cweIds) {
+        const missingCweIds = cweIds.filter(id => !cweMetadataCache[id]);
+        
+        if (missingCweIds.length === 0) {
+            return cweMetadataCache;
+        }
+        
+        try {
+            // 여러 CWE를 병렬로 요청
+            const promises = missingCweIds.map(async (cweId) => {
+                try {
+                    const response = await fetch(`/api/cwe/metadata/${cweId}`);
+                    if (response.ok) {
+                        const metadata = await response.json();
+                        cweMetadataCache[cweId] = metadata;
+                        return { cweId, metadata };
+                    }
+                } catch (error) {
+                    console.warn(`CWE ${cweId} 메타데이터 로드 실패:`, error);
+                }
+                return null;
+            });
+            
+            const results = await Promise.all(promises);
+            const loadedCount = results.filter(r => r !== null).length;
+            if (loadedCount > 0) {
+                console.log(`✅ CWE 메타데이터 로드 완료: ${loadedCount}/${missingCweIds.length}개`);
+            }
+            
+            return cweMetadataCache;
+        } catch (error) {
+            console.error('CWE 메타데이터 로드 중 오류:', error);
+            return cweMetadataCache;
+        }
+    }
+    
+    // CWE 상세 정보 렌더링 (infrastructure_vulnerabilities 포함)
+    function initializeCweDetails() {
+        const container = document.getElementById('cweDetailsContainer');
+        if (!container) return;
+        
+        if (!scanData || !scanData.vulnerabilities) {
+            container.innerHTML = '<p class="text-muted text-center">CWE 데이터가 없습니다.</p>';
+            return;
+        }
+        
+        const vulnerabilities = scanData.vulnerabilities;
+        const infraVulns = scanData.infrastructure_vulnerabilities || [];
+        
+        // CWE별로 취약점 집계
+        const cweMap = {};
+        const cweIdsToLoad = new Set();
+        
+        // 1. vulnerabilities 배열에서 CWE 추출 (배열 형태 모두 처리)
+        vulnerabilities.forEach(vuln => {
+            // CWE 추출 (배열, 문자열 모두 처리)
+            let cweList = [];
+            if (vuln.cwe) {
+                if (Array.isArray(vuln.cwe)) {
+                    cweList = vuln.cwe.filter(c => c); // 빈 값 제거
+                } else if (typeof vuln.cwe === 'string') {
+                    cweList = [vuln.cwe];
+                }
+            }
+            
+            // cwe_metadata가 있으면 cwe_id도 추가
+            if (vuln.cwe_metadata) {
+                const metadataCwe = vuln.cwe_metadata.cwe_id || vuln.cwe_metadata;
+                if (metadataCwe) {
+                    const normalized = metadataCwe.toString().replace('CWE-', '');
+                    if (!cweList.some(c => c.toString().replace('CWE-', '') === normalized)) {
+                        cweList.push(metadataCwe);
+                    }
+                }
+            }
+            
+            // CWE가 없으면 스킵
+            if (cweList.length === 0) return;
+            
+            // 각 CWE 처리
+            cweList.forEach(cwe => {
+                if (!cwe) return;
+                
+                const cweKey = cwe.toString().replace('CWE-', '');
+                if (!cweKey) return;
+                
+                const cweId = `CWE-${cweKey}`;
+                cweIdsToLoad.add(cweId);
+                
+                if (!cweMap[cweKey]) {
+                    // cwe_metadata가 있으면 사용 (단일 메타데이터인 경우)
+                    let cweMetadata = null;
+                    if (vuln.cwe_metadata) {
+                        const metadataCweId = vuln.cwe_metadata.cwe_id || '';
+                        const metadataKey = metadataCweId.toString().replace('CWE-', '');
+                        if (metadataKey === cweKey) {
+                            cweMetadata = vuln.cwe_metadata;
+                        }
+                    }
+                    
+                    cweMap[cweKey] = {
+                        cwe_id: cweId,
+                        name: cweMetadata?.name || cweId,
+                        description: cweMetadata?.description || '로딩 중...',
+                        count: 0,
+                        vulnerabilities: [],
+                        related_cves: [],  // ✅ CVE 목록 추가
+                        maxSeverity: 'info',
+                        metadataLoaded: !!cweMetadata  // 메타데이터 로드 여부
+                    };
+                } else {
+                    // ✅ 이미 존재하는 CWE의 메타데이터가 없거나 플레이스홀더인 경우 업데이트
+                    if ((!cweMap[cweKey].metadataLoaded || cweMap[cweKey].description === '설명 없음' || cweMap[cweKey].description === '로딩 중...') && vuln.cwe_metadata) {
+                        const metadataCweId = vuln.cwe_metadata.cwe_id || '';
+                        const metadataKey = metadataCweId.toString().replace('CWE-', '');
+                        if (metadataKey === cweKey) {
+                            cweMap[cweKey].name = vuln.cwe_metadata.name || cweMap[cweKey].name;
+                            cweMap[cweKey].description = vuln.cwe_metadata.description || cweMap[cweKey].description;
+                            cweMap[cweKey].metadataLoaded = true;
+                        }
+                    }
+                }
+                
+                cweMap[cweKey].count++;
+                cweMap[cweKey].vulnerabilities.push(vuln);
+                
+                // ✅ CWE가 있는 취약점의 CVE를 해당 CWE에 추가
+                if (vuln.cve && Array.isArray(vuln.cve) && vuln.cve.length > 0) {
+                    vuln.cve.forEach(cveId => {
+                        if (cveId && typeof cveId === 'string' && cveId.startsWith('CVE-')) {
+                            // 중복 체크
+                            if (!cweMap[cweKey].related_cves.find(c => c.cve_id === cveId)) {
+                                cweMap[cweKey].related_cves.push({
+                                    cve_id: cveId,
+                                    source: 'vulnerabilities',
+                                    severity: vuln.severity || 'info',
+                                    url: vuln.url || '',
+                                    name: vuln.name || ''
+                                });
+                            }
+                        }
+                    });
+                }
+                
+                // 최고 심각도 추적
+                const severity = (vuln.severity || 'info').toLowerCase();
+                const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+                const currentMax = severityOrder[cweMap[cweKey].maxSeverity] || 0;
+                if (severityOrder[severity] > currentMax) {
+                    cweMap[cweKey].maxSeverity = severity;
+                }
+            });
+        });
+        
+        // 2. infrastructure_vulnerabilities 배열에서 CWE 추출
+        infraVulns.forEach(infraVuln => {
+            const cwe = infraVuln.nvd_data?.cwe;
+            if (!cwe) return;
+            
+            const cweKey = cwe.toString().replace('CWE-', '');
+            const cweId = `CWE-${cweKey}`;
+            cweIdsToLoad.add(cweId);
+            
+            if (!cweMap[cweKey]) {
+                // ✅ nvd_data.cwe_metadata 확인
+                const cweMetadata = infraVuln.nvd_data?.cwe_metadata || null;
+                
+                cweMap[cweKey] = {
+                    cwe_id: cweId,
+                    name: cweMetadata?.name || cweId,  // ✅ 메타데이터 사용
+                    description: cweMetadata?.description || '로딩 중...',  // ✅ 메타데이터 사용
+                    count: 0,
+                    vulnerabilities: [],
+                    related_cves: [],  // ✅ CVE 목록 추가
+                    maxSeverity: 'info',
+                    metadataLoaded: !!cweMetadata
+                };
+            } else {
+                // ✅ 이미 존재하는 CWE의 메타데이터가 없거나 플레이스홀더인 경우 업데이트
+                if ((!cweMap[cweKey].metadataLoaded || cweMap[cweKey].description === '설명 없음' || cweMap[cweKey].description === '로딩 중...') && infraVuln.nvd_data?.cwe_metadata) {
+                    const cweMetadata = infraVuln.nvd_data.cwe_metadata;
+                    cweMap[cweKey].name = cweMetadata.name || cweMap[cweKey].name;
+                    cweMap[cweKey].description = cweMetadata.description || cweMap[cweKey].description;
+                    cweMap[cweKey].metadataLoaded = true;
+                }
+            }
+            
+            // CVSS 점수 기반 심각도 계산
+            const cvssScore = infraVuln.nvd_data?.cvss_score || 0.0;
+            let severity = 'info';
+            if (cvssScore >= 9.0) severity = 'critical';
+            else if (cvssScore >= 7.0) severity = 'high';
+            else if (cvssScore >= 4.0) severity = 'medium';
+            else if (cvssScore > 0) severity = 'low';
+            
+            cweMap[cweKey].count++;
+            cweMap[cweKey].vulnerabilities.push({
+                type: 'infrastructure',  // 인프라 기반 취약점 구분
+                cve_id: infraVuln.cve_id,
+                cvss_score: cvssScore,
+                severity: severity,
+                context: infraVuln.context,
+                nvd_data: infraVuln.nvd_data,
+                cpe: infraVuln.cpe
+            });
+            
+            // ✅ CWE가 일치하는 infrastructure CVE를 해당 CWE에 추가
+            if (infraVuln.cve_id && infraVuln.nvd_data?.cwe) {
+                const infraCwe = infraVuln.nvd_data.cwe.toString().replace('CWE-', '');
+                if (infraCwe === cweKey) {
+                    if (!cweMap[cweKey].related_cves.find(c => c.cve_id === infraVuln.cve_id)) {
+                        cweMap[cweKey].related_cves.push({
+                            cve_id: infraVuln.cve_id,
+                            source: 'infrastructure',
+                            severity: severity,
+                            cvss_score: cvssScore,
+                            nvd_data: infraVuln.nvd_data,
+                            product: infraVuln.context?.product || '',
+                            cpe: infraVuln.cpe || ''
+                        });
+                    }
+                }
+            }
+            
+            // 최고 심각도 업데이트
+            const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+            const currentMax = severityOrder[cweMap[cweKey].maxSeverity] || 0;
+            if (severityOrder[severity] > currentMax) {
+                cweMap[cweKey].maxSeverity = severity;
+            }
+        });
+        
+        // CWE 목록을 심각도와 개수로 정렬
+        const cweListFull = Object.values(cweMap).sort((a, b) => {
+            const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+            const aSeverity = severityOrder[a.maxSeverity] || 0;
+            const bSeverity = severityOrder[b.maxSeverity] || 0;
+            if (bSeverity !== aSeverity) return bSeverity - aSeverity;
+            return b.count - a.count;
+        });
+        
+        // 전역 변수에 저장 (페이징용)
+        cweAllData = cweListFull;
+        cweCurrentPage = 1;
+        
+        // 먼저 기본 렌더링 (로딩 중 표시)
+        renderCweDetails();
+        
+        // 비동기로 메타데이터 로드 후 업데이트
+        if (cweIdsToLoad.size > 0) {
+            loadCweMetadata(Array.from(cweIdsToLoad)).then(() => {
+                // 메타데이터 로드 후 CWE 정보 업데이트
+                let updated = false;
+                cweListFull.forEach(cwe => {
+                    const cweId = cwe.cwe_id;
+                    if (cweMetadataCache[cweId] && !cwe.metadataLoaded) {
+                        const metadata = cweMetadataCache[cweId];
+                        cwe.name = metadata.name || cwe.name;
+                        cwe.description = metadata.description || cwe.description;
+                        cwe.metadataLoaded = true;
+                        updated = true;
+                    }
+                });
+                
+                // 업데이트된 경우에만 다시 렌더링
+                if (updated) {
+                    renderCweDetails();
+                }
+            });
+        }
+    }
+    
+    // CWE 상세 정보 페이징 변수
+    let cweCurrentPage = 1;
+    const cweItemsPerPage = 10;
+    let cweAllData = [];
+    
+    // CWE 상세 정보 렌더링 (페이징 적용)
+    function renderCweDetails() {
+        const container = document.getElementById('cweDetailsContainer');
+        const paginationEl = document.getElementById('cweDetailsPagination');
+        const infoEl = document.getElementById('cweDetailsInfo');
+        const pageInfoEl = document.getElementById('cweDetailsPageInfo');
+        const prevBtn = document.getElementById('cweDetailsPrevBtn');
+        const nextBtn = document.getElementById('cweDetailsNextBtn');
+        
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (cweAllData.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">CWE 데이터가 없습니다.</p>';
+            if (paginationEl) paginationEl.style.display = 'none';
+            return;
+        }
+        
+        // 페이징 계산
+        const totalPages = Math.ceil(cweAllData.length / cweItemsPerPage);
+        const startIndex = (cweCurrentPage - 1) * cweItemsPerPage;
+        const endIndex = Math.min(startIndex + cweItemsPerPage, cweAllData.length);
+        const pageData = cweAllData.slice(startIndex, endIndex);
+        
+        // CWE 카드 렌더링
+        pageData.forEach(cwe => {
+            const card = document.createElement('div');
+            card.className = 'cwe-card';
+            
+            // CVE 목록 정렬 (CVSS 점수 높은 순, 없으면 severity 순)
+            const sortedCves = (cwe.related_cves || []).sort((a, b) => {
+                const aScore = a.cvss_score || 0;
+                const bScore = b.cvss_score || 0;
+                if (aScore !== bScore) return bScore - aScore;
+                
+                const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+                return (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0);
+            });
+            
+            // CVE 목록 HTML 생성
+            let cveListHtml = '';
+            if (sortedCves.length > 0) {
+                const cveBadges = sortedCves.slice(0, 5).map(cve => {
+                    const cvssText = cve.cvss_score ? ` (CVSS: ${cve.cvss_score.toFixed(1)})` : '';
+                    return `
+                        <a href="https://nvd.nist.gov/vuln/detail/${cve.cve_id}" 
+                           target="_blank"
+                           class="badge bg-danger"
+                           style="text-decoration: none; cursor: pointer; margin-right: 0.25rem;"
+                           title="NVD에서 ${cve.cve_id}${cvssText} 확인">
+                            ${cve.cve_id}
+                            <i class="fas fa-external-link-alt ms-1" style="font-size: 0.7em;"></i>
+                        </a>
+                    `;
+                }).join('');
+                
+                const moreBadge = sortedCves.length > 5 ? `
+                    <span class="badge bg-secondary" style="cursor: pointer;" 
+                          onclick="showCweCveList('${escapeHtml(cwe.cwe_id)}', '${escapeHtml(cwe.name)}', ${JSON.stringify(sortedCves).replace(/'/g, "&#39;").replace(/"/g, '&quot;')})">
+                        +${sortedCves.length - 5}개 더보기
+                    </span>
+                ` : '';
+                
+                cveListHtml = `
+                    <div class="mb-2" style="border-top: 1px solid var(--slate-600); padding-top: 0.5rem;">
+                        <p class="mb-1" style="color: var(--slate-400); font-size: 0.85rem;">
+                            <i class="fas fa-shield-alt me-1"></i>관련 CVE (${sortedCves.length}개):
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                            ${cveBadges}${moreBadge}
+                        </div>
+                    </div>
+                `;
+            } else {
+                cveListHtml = `
+                    <div class="mb-2" style="border-top: 1px solid var(--slate-600); padding-top: 0.5rem;">
+                        <p class="mb-1" style="color: var(--slate-500); font-size: 0.85rem; font-style: italic;">
+                            <i class="fas fa-info-circle me-1"></i>관련 CVE 없음
+                        </p>
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0">
+                        <a href="https://cwe.mitre.org/data/definitions/${cwe.cwe_id.replace('CWE-', '')}.html" 
+                           target="_blank"
+                           style="color: var(--primary-blue); font-weight: 700; text-decoration: underline; cursor: pointer;">
+                            ${escapeHtml(cwe.cwe_id)}
+                            <i class="fas fa-external-link-alt ms-1" style="font-size: 0.8em;"></i>
+                        </a>
+                        <span class="ms-2">${escapeHtml(cwe.name)}</span>
+                    </h6>
+                    ${getSeverityBadge(cwe.maxSeverity)}
+                </div>
+                <p class="mb-2" style="color: var(--slate-300);">${escapeHtml(cwe.description)}</p>
+                ${cveListHtml}
+                <p class="mb-0" style="color: var(--slate-400); font-size: 0.85rem;">
+                    <i class="fas fa-bug me-1"></i>발견된 취약점: 
+                    <strong style="color: var(--slate-200); cursor: pointer; text-decoration: underline;" 
+                            onclick="showCweVulnerabilities('${escapeHtml(cwe.cwe_id)}', '${escapeHtml(cwe.name)}', ${cwe.count})">
+                        ${cwe.count}개
+                    </strong>
+                </p>
+            `;
+            container.appendChild(card);
+        });
+        
+        // 페이징 컨트롤 업데이트
+        if (paginationEl) {
+            paginationEl.style.display = cweAllData.length > cweItemsPerPage ? 'flex' : 'none';
+        }
+        if (infoEl) {
+            infoEl.textContent = `표시 중: ${startIndex + 1}-${endIndex} / 전체: ${cweAllData.length}`;
+        }
+        if (pageInfoEl) {
+            pageInfoEl.textContent = `${cweCurrentPage} / ${totalPages}`;
+        }
+        if (prevBtn) {
+            prevBtn.disabled = cweCurrentPage <= 1;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = cweCurrentPage >= totalPages;
+        }
+        
+        console.log(`✅ [CWE 상세 정보] ${cweAllData.length}개 중 ${startIndex + 1}-${endIndex}번째 표시 (페이지 ${cweCurrentPage}/${totalPages})`);
+        
+        // CWE 렌더링 후 높이 동기화
+        setTimeout(() => {
+            syncCweContainerHeight();
+        }, 100);
+    }
+    
+    // CWE 페이지 변경
+    function changeCwePage(direction) {
+        const totalPages = Math.ceil(cweAllData.length / cweItemsPerPage);
+        const newPage = cweCurrentPage + direction;
+        if (newPage >= 1 && newPage <= totalPages) {
+            cweCurrentPage = newPage;
+            renderCweDetails();
+        }
+    }
+    
+    // CWE 취약점 목록 모달 표시 (인프라 기반 취약점 포함)
+    function showCweVulnerabilities(cweId, cweName, totalCount) {
+        const modal = new bootstrap.Modal(document.getElementById('cweVulnerabilitiesModal'));
+        const content = document.getElementById('cweVulnerabilitiesContent');
+        const modalLabel = document.getElementById('cweVulnerabilitiesModalLabel');
+        
+        if (!scanData) {
+            content.innerHTML = '<p style="color: var(--slate-400) !important; background-color: transparent; text-align: center;">취약점 데이터가 없습니다.</p>';
+            modal.show();
+            return;
+        }
+        
+        // 모달 제목 설정
+        modalLabel.innerHTML = `<i class="fas fa-bug me-2"></i>${cweId} - ${cweName} (총 ${totalCount}개)`;
+        
+        // 해당 CWE의 취약점 수집 (vulnerabilities + infrastructure_vulnerabilities)
+        const allVulnerabilities = [];
+        
+        // 1. vulnerabilities 배열에서 필터링
+        if (scanData.vulnerabilities) {
+            const cweKey = cweId.replace('CWE-', '');
+            scanData.vulnerabilities.forEach(v => {
+                const vCwe = v.cwe || v.cwe_metadata?.cwe_id || null;
+                const vCweKey = vCwe ? vCwe.toString().replace('CWE-', '') : null;
+                if (vCweKey === cweKey) {
+                    allVulnerabilities.push(v);
+                }
+            });
+        }
+        
+        // 2. infrastructure_vulnerabilities 배열에서 필터링
+        if (scanData.infrastructure_vulnerabilities) {
+            const cweKey = cweId.replace('CWE-', '');
+            scanData.infrastructure_vulnerabilities.forEach(infraVuln => {
+                const vCwe = infraVuln.nvd_data?.cwe;
+                const vCweKey = vCwe ? vCwe.toString().replace('CWE-', '') : null;
+                if (vCweKey === cweKey) {
+                    // CVSS 점수 기반 심각도 계산
+                    const cvssScore = infraVuln.nvd_data?.cvss_score || 0.0;
+                    let severity = 'info';
+                    if (cvssScore >= 9.0) severity = 'critical';
+                    else if (cvssScore >= 7.0) severity = 'high';
+                    else if (cvssScore >= 4.0) severity = 'medium';
+                    else if (cvssScore > 0) severity = 'low';
+                    
+                    allVulnerabilities.push({
+                        type: 'infrastructure',
+                        cve_id: infraVuln.cve_id,
+                        cvss_score: cvssScore,
+                        severity: severity,
+                        context: infraVuln.context,
+                        nvd_data: infraVuln.nvd_data,
+                        cpe: infraVuln.cpe
+                    });
+                }
+            });
+        }
+        
+        if (allVulnerabilities.length === 0) {
+            content.innerHTML = `
+                <div class="text-center py-5" style="background-color: transparent;">
+                    <i class="fas fa-info-circle fa-3x mb-3" style="color: var(--slate-400) !important;"></i>
+                    <p style="color: var(--slate-400) !important; background-color: transparent;">해당 CWE에 대한 취약점 데이터가 없습니다.</p>
+                </div>
+            `;
+        } else {
+            let tableRows = '';
+            allVulnerabilities.forEach((vuln, index) => {
+                // 인프라 기반 취약점 vs URL 기반 취약점 구분
+                if (vuln.type === 'infrastructure') {
+                    // 인프라 기반 취약점 (CVE 매칭 결과)
+                    const context = vuln.context || {};
+                    const product = context.product || context.name || '알 수 없음';
+                    const version = context.version || '';
+                    const productVersion = version ? `${product} ${version}` : product;
+                    const cveId = escapeHtml(vuln.cve_id || 'N/A');
+                    const cvssScore = vuln.cvss_score?.toFixed(1) || 'N/A';
+                    const severity = vuln.severity || 'info';
+                    
+                    // CVE ID를 클릭 가능한 링크로 만들기
+                    const cveLink = cveId !== 'N/A' ? `
+                        <a href="https://nvd.nist.gov/vuln/detail/${cveId}" 
+                           target="_blank" 
+                           style="color: var(--primary-blue); text-decoration: underline; font-weight: 600;">
+                            ${cveId}
+                            <i class="fas fa-external-link-alt ms-1" style="font-size: 0.7em;"></i>
+                        </a>
+                    ` : cveId;
+                    
+                    tableRows += `
+                        <tr style="background-color: var(--slate-800) !important; border-bottom: 1px solid var(--slate-600) !important; border-color: var(--slate-600) !important;">
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">${index + 1}</td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+                                ${cveLink}
+                            </td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">${getSeverityBadge(severity)}</td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+                                <span class="badge bg-info">인프라</span>
+                            </td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+                                <div style="color: var(--slate-300);">
+                                    <i class="fas fa-server me-1"></i>${escapeHtml(productVersion)}
+                                    <span class="ms-2" style="color: var(--slate-400);">
+                                        <i class="fas fa-chart-line me-1"></i>CVSS: ${cvssScore}
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    // URL 기반 취약점 (ZAP/Nuclei 결과)
+                    const name = escapeHtml(vuln.name || '-');
+                    const description = escapeHtml(vuln.description || '');
+                    const severity = vuln.severity || 'info';
+                    const source = vuln.source || vuln.sources?.[0] || 'unknown';
+                    const url = vuln.url || '';
+                    
+                    // 취약점 유형 판단 (URL 기반인지 시스템 레벨인지)
+                    const isSystemLevel = !url || url === '' || cweId.includes('497') || cweId.includes('693');
+                    
+                    let locationCell = '-';
+                    if (url && url !== '' && !isSystemLevel) {
+                        locationCell = `
+                            <a href="${safeUrl(url)}" target="_blank" style="color: var(--primary-blue); word-break: break-all;">
+                                ${escapeHtml(url)}
+                                <i class="fas fa-external-link-alt ms-1"></i>
+                            </a>
+                        `;
+                    } else if (description) {
+                        locationCell = `
+                            <div style="color: var(--slate-300); font-size: 0.9rem;">
+                                <i class="fas fa-info-circle me-1"></i>${description}
+                            </div>
+                        `;
+                    } else {
+                        locationCell = `
+                            <div style="color: var(--slate-400); font-size: 0.9rem;">
+                                <i class="fas fa-server me-1"></i>시스템 레벨 취약점
+                            </div>
+                        `;
+                    }
+                    
+                    const rowClick = (url && url !== '' && !isSystemLevel) ? `onclick="window.open('${safeUrl(url)}', '_blank')" style="cursor: pointer;"` : '';
+                    
+                        tableRows += `
+                        <tr ${rowClick} style="border-bottom: 1px solid var(--slate-600) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">${index + 1}</td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">
+                                <strong style="color: var(--slate-100);">${name}</strong>
+                                ${description && url ? `<div style="color: var(--slate-400); font-size: 0.85rem; margin-top: 0.25rem; background-color: transparent;">${description}</div>` : ''}
+                            </td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">${getSeverityBadge(severity)}</td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">${getSourceBadge(source)}</td>
+                            <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important; border-color: var(--slate-600) !important;">${locationCell}</td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            content.innerHTML = `
+                <div class="mb-3" style="background-color: transparent;">
+                    <p class="mb-0" style="color: var(--slate-300) !important; background-color: transparent;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        총 <strong style="color: var(--slate-100) !important; background-color: transparent;">${totalCount}개</strong>의 취약점이 발견되었으며, 
+                        아래는 주요 취약점 목록입니다.
+                    </p>
+                </div>
+                <div class="table-responsive" style="background-color: transparent;">
+                    <table class="table table-hover" style="background-color: var(--slate-800) !important; color: var(--slate-200) !important; border-color: var(--slate-600) !important;">
+                        <thead style="background-color: var(--slate-700) !important; color: var(--slate-100) !important;">
+                            <tr style="background-color: var(--slate-700) !important;">
+                                <th style="width: 5%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important; border-color: var(--slate-600) !important;">#</th>
+                                <th style="width: 30%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important; border-color: var(--slate-600) !important;">취약점 이름</th>
+                                <th style="width: 15%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important; border-color: var(--slate-600) !important;">심각도</th>
+                                <th style="width: 15%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important; border-color: var(--slate-600) !important;">소스</th>
+                                <th style="width: 35%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important; border-color: var(--slate-600) !important;">위치 / 정보</th>
+                            </tr>
+                        </thead>
+                        <tbody style="background-color: var(--slate-800) !important;">
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        modal.show();
+    }
+    
+    // CWE별 전체 CVE 목록 표시 함수
+    function showCweCveList(cweId, cweName, cveList) {
+        // JSON 문자열을 파싱 (onclick에서 전달된 경우)
+        let parsedCveList = cveList;
+        if (typeof cveList === 'string') {
+            try {
+                parsedCveList = JSON.parse(cveList.replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
+            } catch (e) {
+                console.error('CVE 목록 파싱 실패:', e);
+                parsedCveList = [];
+            }
+        }
+        
+        const modal = new bootstrap.Modal(document.getElementById('cweVulnerabilitiesModal'));
+        const content = document.getElementById('cweVulnerabilitiesContent');
+        const title = document.getElementById('cweVulnerabilitiesModalLabel');
+        
+        if (!content || !title) return;
+        
+        title.innerHTML = `<i class="fas fa-shield-alt me-2"></i>${cweId} (${cweName}) 관련 CVE 목록 (${parsedCveList.length}개)`;
+        
+        if (parsedCveList.length === 0) {
+            content.innerHTML = `
+                <div class="text-center py-5" style="background-color: transparent;">
+                    <i class="fas fa-info-circle fa-3x mb-3" style="color: var(--slate-400) !important;"></i>
+                    <p style="color: var(--slate-400) !important; background-color: transparent;">해당 CWE에 대한 CVE가 없습니다.</p>
+                </div>
+            `;
+        } else {
+            // CVE 목록 테이블 생성
+            const tableRows = parsedCveList.map((cve, index) => {
+                const cvssScore = cve.cvss_score ? cve.cvss_score.toFixed(1) : 'N/A';
+                const severity = cve.severity || 'info';
+                const product = cve.product || cve.name || '-';
+                const source = cve.source === 'infrastructure' ? '인프라' : '취약점';
+                
+                return `
+                    <tr style="cursor: pointer; background-color: var(--slate-800) !important; border-bottom: 1px solid var(--slate-600) !important;" 
+                        onclick="window.open('https://nvd.nist.gov/vuln/detail/${cve.cve_id}', '_blank')">
+                        <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important;">${index + 1}</td>
+                        <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important;">
+                            <a href="https://nvd.nist.gov/vuln/detail/${cve.cve_id}" 
+                               target="_blank"
+                               style="color: var(--primary-blue); text-decoration: underline; font-weight: 600;">
+                                ${cve.cve_id}
+                                <i class="fas fa-external-link-alt ms-1" style="font-size: 0.7em;"></i>
+                            </a>
+                        </td>
+                        <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important;">${getSeverityBadge(severity)}</td>
+                        <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important;">
+                            <strong style="color: var(--danger-red);">${cvssScore}</strong>
+                        </td>
+                        <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important;">${escapeHtml(product)}</td>
+                        <td style="color: var(--slate-200) !important; background-color: var(--slate-800) !important;">
+                            <span class="badge bg-info">${source}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            content.innerHTML = `
+                <div class="mb-3" style="background-color: transparent;">
+                    <p class="mb-0" style="color: var(--slate-300) !important; background-color: transparent;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        총 <strong style="color: var(--slate-100) !important; background-color: transparent;">${parsedCveList.length}개</strong>의 CVE가 발견되었습니다.
+                        각 CVE를 클릭하면 NVD에서 상세 정보를 확인할 수 있습니다.
+                    </p>
+                </div>
+                <div class="table-responsive" style="background-color: transparent;">
+                    <table class="table table-striped table-hover" style="background-color: var(--slate-800) !important; color: var(--slate-200) !important;">
+                        <thead style="background-color: var(--slate-700) !important; color: var(--slate-100) !important;">
+                            <tr style="background-color: var(--slate-700) !important;">
+                                <th style="width: 5%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important;">#</th>
+                                <th style="width: 20%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important;">CVE ID</th>
+                                <th style="width: 12%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important;">심각도</th>
+                                <th style="width: 12%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important;">CVSS</th>
+                                <th style="width: 35%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important;">제품/취약점</th>
+                                <th style="width: 16%; color: var(--slate-100) !important; background-color: var(--slate-700) !important; border-bottom: 2px solid var(--slate-600) !important;">소스</th>
+                            </tr>
+                        </thead>
+                        <tbody style="background-color: var(--slate-800) !important;">
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        modal.show();
+    }
+    
+    // 비동기 렌더링: 대시보드 초기화 (성능 최적화)
+    function initializeDashboardAsync() {
+        if (!scanData) {
+            console.warn("scanData is null or empty");
+            showNoDataMessage();
+            return;
+        }
+        
+        // 데이터 구조 검증
+        if (!scanData.vulnerabilities && !scanData.infrastructure) {
+            console.warn("scanData does not have expected structure (vulnerabilities or infrastructure)");
+            showNoDataMessage();
+            return;
+        }
+        
+        // 1단계: 요약 카드 (즉시 실행)
+        updateSummaryCards();
+        
+        // 2단계: ZAP 위험도 분포 차트 (0.3초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeZAPSeverityChart();
+            }, 300);
+        });
+        
+        // 3단계: Nmap 위험도 분포 차트 (0.5초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeNmapSeverityChart();
+            }, 500);
+        });
+        
+        // 4단계: Nuclei 위험도 분포 차트 (0.7초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeNucleiSeverityChart();
+            }, 700);
+        });
+        
+        // 5단계: CVE 매칭 테이블 (1.0초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeCveMatchingTable();
+            }, 1000);
+        });
+        
+        // 6단계: CWE 상세 정보 (1.3초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeCweDetails();
+            }, 1300);
+        });
+        
+        // 7단계: 인프라 서비스 그리드 (1.6초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeInfrastructureGrid();
+            }, 1600);
+        });
+        
+        // 8단계: Katana 엔드포인트 테이블 (1.9초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeEndpointsTable();
+            }, 1900);
+        });
+        
+        // 9단계: AI 요약 카드 (2.2초 후)
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                initializeAISummaryCard();
+            }, 2200);
+        });
+    }
+    
+    // 프로그레스 바 업데이트 함수
+    function updateScanProgress(progress, stage, message) {
+        const progressBar = document.getElementById('scan-progress-bar');
+        const progressText = document.getElementById('scan-progress-text');
+        const progressPercentage = document.getElementById('scan-percentage');
+        const stageEl = document.getElementById('scan-stage');
+        const messageEl = document.getElementById('scan-message');
+        
+        if (progressBar) {
+            progressBar.style.width = progress + '%';
+            progressBar.setAttribute('aria-valuenow', progress);
+            if (progressText) {
+                progressText.textContent = progress + '%';
+            }
+        }
+        
+        if (progressPercentage) {
+            progressPercentage.textContent = progress + '%';
+        }
+        
+        if (stageEl && stage) {
+            stageEl.textContent = escapeHtml(stage);
+        }
+        
+        if (messageEl && message) {
+            messageEl.textContent = escapeHtml(message);
+        }
+    }
+    
+    // 스캔 시작 버튼 제거됨 - projects.html에서 스캔 버튼 사용
+    
+    // WebSocket 이벤트 리스너 (호환성을 위해 유지, 실제로는 log_update 사용)
+    socket.on('scan_progress', function(data) {
+        // 진행률 계산 로직 제거 - 로그 스트림만 사용
+        // 이 이벤트는 호환성을 위해 유지하되, 실제로는 log_update를 사용
+    });
+    
+    // log_update 이벤트 리스너 제거됨 - 터미널 창이 없으므로 로그 표시 안 함
+    
+    // 스캔 완료 처리
+    socket.on('scan_complete', function(data) {
+        // 프로젝트 ID 필터링
+        if (data.project_id !== undefined && data.project_id !== projectId) {
+            return;
+        }
+        
+        // 페이지 새로고침하여 최신 결과 표시
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    });
+    
+    socket.on('scan_error', function(data) {
+        // 프로젝트 ID 필터링: 현재 페이지의 프로젝트 ID와 일치하는 신호만 처리
+        if (data.project_id !== undefined && data.project_id !== projectId) {
+            console.log(`⏭️ [스캔 오류] 다른 프로젝트 신호 무시 (받은 project_id: ${data.project_id}, 현재 project_id: ${projectId})`);
+            return;
+        }
+        
+        // 프로그레스 바 숨기기
+        const progressContainer = document.getElementById('scan-progress-container');
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+        
+        // 에러 메시지 표시
+        const statusEl = document.getElementById('scan-status');
+        if (statusEl) {
+            statusEl.innerHTML = '<div class="alert alert-danger mb-0"><i class="fas fa-exclamation-triangle me-2"></i>오류: ' + escapeHtml(data.error || '알 수 없는 오류') + '</div>';
+        }
+    });
+    
+    // 연결 복구: 페이지 로드 시 진행 중인 스캔 상태 복구
+    async function restoreScanProgress() {
+        try {
+            const response = await fetch(`/api/project/${projectId}/status`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'running' && data.scan_id) {
+                    // 진행 중인 스캔이 있으면 프로그레스 바 표시
+                    const progressContainer = document.getElementById('scan-progress-container');
+                    if (progressContainer) {
+                        progressContainer.style.display = 'block';
+                        // 기본 진행률로 설정 (정확한 진행률은 WebSocket으로 받음)
+                        updateScanProgress(50, 'running', '스캔 진행 중...');
+                        // WebSocket 구독
+                        socket.emit('subscribe_scan', { scan_id: data.scan_id });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('스캔 상태 복구 실패:', e);
+        }
+    }
+    
+    // 이력 선택 드롭다운 변경 이벤트
+    const historySelect = document.getElementById('scan-history-select');
+    if (historySelect) {
+        historySelect.addEventListener('change', function() {
+            const selectedTimestamp = this.value;
+            if (selectedTimestamp) {
+                // URL 파라미터로 타임스탬프 전달하여 페이지 새로고침
+                window.location.href = `/dashboard/${projectId}?timestamp=${selectedTimestamp}`;
+            }
+        });
+    }
+    
+    // 터미널 지우기 버튼 제거됨 - 터미널 창이 없으므로
+    
+    // Raw Data 탭 초기화
+    function initializeRawDataTab() {
+        if (!scanData) {
+            return;
+        }
+        
+        // 통계 표시
+        const statsContainer = document.getElementById('raw-data-stats');
+        if (statsContainer) {
+            const vulnerabilities = scanData.vulnerabilities || [];
+            const infrastructure = scanData.infrastructure || {};
+            const openPorts = infrastructure.open_ports || [];
+            const services = infrastructure.services || [];
+            const endpoints = scanData.endpoints || [];
+            
+            statsContainer.innerHTML = `
+                <div class="col-md-3">
+                    <div class="card bg-slate-800 border-slate-700">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">취약점 개수</h6>
+                            <h3 class="text-white mb-0">${vulnerabilities.length}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-slate-800 border-slate-700">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">열린 포트</h6>
+                            <h3 class="text-white mb-0">${openPorts.length}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-slate-800 border-slate-700">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">서비스</h6>
+                            <h3 class="text-white mb-0">${services.length}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-slate-800 border-slate-700">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">엔드포인트</h6>
+                            <h3 class="text-white mb-0">${endpoints.length}</h3>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // JSON 데이터 표시
+        const jsonContainer = document.getElementById('raw-data-json');
+        if (jsonContainer) {
+            jsonContainer.textContent = JSON.stringify(scanData, null, 2);
+        }
+    }
+    
+    // 대시보드 UI 업데이트 함수
+    function updateDashboardUI(data) {
+        // 데이터 없음 메시지 숨기기 (데이터가 있으면)
+        const noDataMessage = document.getElementById('no-data-message');
+        
+        // API 응답 구조 확인: { "scan_data": {...}, "ai_report_md": "..." }
+        if (!data) {
+            console.warn("❌ [API Fetch] 응답 데이터가 없습니다");
+            showNoDataMessage();
+            return;
+        }
+        
+        // scan_data 확인 (None이거나 빈 객체인 경우 처리)
+        if (!data.scan_data || (typeof data.scan_data === 'object' && Object.keys(data.scan_data).length === 0)) {
+            console.warn("❌ [API Fetch] scan_data가 없거나 비어있습니다");
+            console.log("   - 응답 데이터:", data);
+            showNoDataMessage();
+            return;
+        }
+        
+        // 데이터가 있으면 메시지 숨기기
+        if (noDataMessage) {
+            noDataMessage.style.display = 'none';
+        }
+        
+        // 스캔 데이터 설정
+        scanData = data.scan_data;
+        aiReportMd = data.ai_report_md || null;
+        
+        console.log('✅ [API Fetch] 스캔 데이터 로드 완료');
+        console.log('   - scan_data 타입:', typeof scanData);
+        console.log('   - scan_data 키:', Object.keys(scanData));
+        console.log('   - 취약점 개수:', scanData.vulnerabilities ? scanData.vulnerabilities.length : 0);
+        console.log('   - AI 리포트 존재:', aiReportMd ? '예' : '아니오');
+        
+        // 데이터 검증 및 보강
+        validateAndEnrichScanData();
+        
+        // 대시보드 초기화
+        initializeDashboardAsync();
+        loadAIReport();
+        initializeRawDataTab();
+    }
+    
+    // 데이터 검증 및 보강 함수
+    function validateAndEnrichScanData() {
+        if (!scanData) return;
+        
+        console.log('🔍 [데이터 검증] 스캔 데이터 검증 시작...');
+        
+        // 1. vulnerabilities 배열 검증
+        if (!Array.isArray(scanData.vulnerabilities)) {
+            console.warn('⚠️ [데이터 검증] vulnerabilities가 배열이 아닙니다. 빈 배열로 초기화합니다.');
+            scanData.vulnerabilities = [];
+        }
+        
+        // 2. infrastructure_vulnerabilities 배열 검증
+        if (!Array.isArray(scanData.infrastructure_vulnerabilities)) {
+            console.warn('⚠️ [데이터 검증] infrastructure_vulnerabilities가 배열이 아닙니다. 빈 배열로 초기화합니다.');
+            scanData.infrastructure_vulnerabilities = [];
+        }
+        
+        // 3. infrastructure 객체 검증
+        if (!scanData.infrastructure || typeof scanData.infrastructure !== 'object') {
+            console.warn('⚠️ [데이터 검증] infrastructure가 객체가 아닙니다. 빈 객체로 초기화합니다.');
+            scanData.infrastructure = { open_ports: [], services: [], ip_addresses: [] };
+        }
+        
+        // 4. 각 취약점의 필수 필드 검증 및 보강
+        let missingFields = {
+            source: 0,
+            severity: 0,
+            cwe: 0,
+            name: 0
+        };
+        
+        scanData.vulnerabilities.forEach((vuln, index) => {
+            // source 필드 검증
+            if (!vuln.source && (!vuln.sources || vuln.sources.length === 0)) {
+                missingFields.source++;
+                vuln.source = 'unknown';
+            }
+            
+            // severity 필드 검증
+            if (!vuln.severity) {
+                missingFields.severity++;
+                vuln.severity = 'info';
+            }
+            
+            // cwe 필드 검증 (선택적이지만 로깅)
+            if (!vuln.cwe && !vuln.cwe_metadata) {
+                missingFields.cwe++;
+            }
+            
+            // name 필드 검증
+            if (!vuln.name) {
+                missingFields.name++;
+                vuln.name = 'Unknown Vulnerability';
+            }
+        });
+        
+        // 5. infrastructure_vulnerabilities의 필드 검증
+        let infraMissingFields = {
+            cve_id: 0,
+            nvd_data: 0,
+            cvss_score: 0
+        };
+        
+        scanData.infrastructure_vulnerabilities.forEach((infraVuln, index) => {
+            // cve_id 필드 검증
+            if (!infraVuln.cve_id) {
+                infraMissingFields.cve_id++;
+            }
+            
+            // nvd_data 객체 검증
+            if (!infraVuln.nvd_data || typeof infraVuln.nvd_data !== 'object') {
+                infraMissingFields.nvd_data++;
+                infraVuln.nvd_data = {
+                    cvss_score: 0.0,
+                    summary: '',
+                    cwe: '',
+                    published: '',
+                    modified: '',
+                    references: []
+                };
+            }
+            
+            // cvss_score 필드 검증
+            if (typeof infraVuln.nvd_data.cvss_score !== 'number') {
+                infraMissingFields.cvss_score++;
+                infraVuln.nvd_data.cvss_score = 0.0;
+            }
+        });
+        
+        // 검증 결과 로그
+        console.log('✅ [데이터 검증] 검증 완료');
+        console.log(`   - 총 취약점: ${scanData.vulnerabilities.length}개`);
+        console.log(`   - 인프라 취약점: ${scanData.infrastructure_vulnerabilities.length}개`);
+        
+        if (missingFields.source > 0 || missingFields.severity > 0 || missingFields.name > 0) {
+            console.warn('⚠️ [데이터 검증] 일부 취약점에 필수 필드가 누락되어 기본값으로 설정되었습니다:');
+            if (missingFields.source > 0) console.warn(`   - source 누락: ${missingFields.source}개`);
+            if (missingFields.severity > 0) console.warn(`   - severity 누락: ${missingFields.severity}개`);
+            if (missingFields.name > 0) console.warn(`   - name 누락: ${missingFields.name}개`);
+        }
+        
+        if (missingFields.cwe > 0) {
+            console.info(`ℹ️ [데이터 검증] CWE 정보 없음: ${missingFields.cwe}개 (선택적 필드)`);
+        }
+        
+        if (infraMissingFields.cve_id > 0 || infraMissingFields.nvd_data > 0 || infraMissingFields.cvss_score > 0) {
+            console.warn('⚠️ [데이터 검증] 일부 인프라 취약점에 필수 필드가 누락되어 기본값으로 설정되었습니다:');
+            if (infraMissingFields.cve_id > 0) console.warn(`   - cve_id 누락: ${infraMissingFields.cve_id}개`);
+            if (infraMissingFields.nvd_data > 0) console.warn(`   - nvd_data 누락: ${infraMissingFields.nvd_data}개`);
+            if (infraMissingFields.cvss_score > 0) console.warn(`   - cvss_score 누락 또는 잘못된 타입: ${infraMissingFields.cvss_score}개`);
+        }
+    }
+    
+    // 페이지 로드 시 API를 통해 데이터 로드
+    // 윈도우 리사이즈 시 CWE 컨테이너 높이 재조절
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            syncCweContainerHeight();
+        }, 250);
+    });
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // localStorage에서 Nuclei 필터 상태 복원
+        const savedFilter = localStorage.getItem('excludeNucleiInfoLow');
+        if (savedFilter === 'true') {
+            excludeNucleiInfoLow = true;
+            const checkbox = document.getElementById('excludeNucleiInfoLow');
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+            console.log('✅ [localStorage] Nuclei Info/Low 필터 상태 복원: 제외됨');
+        }
+        
+        // URL 파라미터에서 타임스탬프 확인
+        const urlParams = new URLSearchParams(window.location.search);
+        const selectedTimestamp = urlParams.get('timestamp');
+        
+        let apiUrl;
+        if (selectedTimestamp) {
+            // 특정 타임스탬프의 데이터 로드
+            console.log(`🔄 [API Fetch] 타임스탬프 ${selectedTimestamp}의 스캔 데이터 로드 시작...`);
+            apiUrl = `/api/history/${projectId}/${selectedTimestamp}`;
+        } else {
+            // 최신 데이터 로드
+            console.log('🔄 [API Fetch] 최신 스캔 데이터 로드 시작...');
+            apiUrl = `/api/project/${projectId}/latest`;
+        }
+        
+        // API 호출
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ [API Fetch] API 응답 수신');
+                updateDashboardUI(data);
+            })
+            .catch(error => {
+                console.error('❌ [API Fetch] 데이터 로드 실패:', error);
+                // 에러 발생 시 빈 상태 표시
+                showNoDataMessage();
+            });
+    });
+</script>
+{% endblock %}
